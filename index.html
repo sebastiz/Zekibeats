@@ -1,0 +1,1924 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Dance Track Maker — Step Seq · 16</title>
+<meta name="description" content="A browser-based dance track maker: 10-track drum machine, acid bass, lead and chord synths, FX rack, clip-matrix song arrangement, and WAV export. All synthesized with the Web Audio API." />
+<style>
+  html, body { margin: 0; padding: 0; background: #101013; }
+</style>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+</head>
+<body>
+<div id="root"></div>
+<script>
+import { jsxDEV as _jsxDEV, Fragment as _Fragment } from "react/jsx-dev-runtime";
+const {
+  useState,
+  useRef,
+  useEffect,
+  useCallback
+} = React;
+
+// ---------- constants ----------
+const STEPS = 16;
+const SECTIONS = ["drums", "bass", "lead", "chord"];
+const PAT_KEYS = ["A", "B", "C", "D"];
+const SONG_SLOTS = 16;
+const PAT_COLORS = {
+  A: "#ffb03a",
+  B: "#c77dff",
+  C: "#5affc3",
+  D: "#ff7db8"
+};
+const TRACKS = [{
+  id: "kick",
+  name: "KICK",
+  color: "#ff5d3a"
+}, {
+  id: "snare",
+  name: "SNARE",
+  color: "#ffb03a"
+}, {
+  id: "clap",
+  name: "CLAP",
+  color: "#ffd23a"
+}, {
+  id: "rim",
+  name: "RIM",
+  color: "#f2f0a0"
+}, {
+  id: "chat",
+  name: "HAT",
+  color: "#7ee08a"
+}, {
+  id: "ohat",
+  name: "OPN HAT",
+  color: "#5ac8fa"
+}, {
+  id: "ltom",
+  name: "LO TOM",
+  color: "#e08a5a"
+}, {
+  id: "htom",
+  name: "HI TOM",
+  color: "#e0b98a"
+}, {
+  id: "cow",
+  name: "COWBELL",
+  color: "#8ae0d0"
+}, {
+  id: "ride",
+  name: "RIDE",
+  color: "#a8b4e0"
+}];
+const SECTION_META = {
+  drums: {
+    label: "DRUMS",
+    color: "#ffb03a"
+  },
+  bass: {
+    label: "BASS",
+    color: "#c77dff"
+  },
+  lead: {
+    label: "LEAD",
+    color: "#5affc3"
+  },
+  chord: {
+    label: "CHORDS",
+    color: "#ff7db8"
+  }
+};
+const FX_COLOR = "#ffd23a";
+const BASS_NOTES = [{
+  n: "A1",
+  f: 55.0
+}, {
+  n: "B1",
+  f: 61.74
+}, {
+  n: "C2",
+  f: 65.41
+}, {
+  n: "D2",
+  f: 73.42
+}, {
+  n: "E2",
+  f: 82.41
+}, {
+  n: "F2",
+  f: 87.31
+}, {
+  n: "G2",
+  f: 98.0
+}, {
+  n: "A2",
+  f: 110.0
+}];
+const LEAD_NOTES = [{
+  n: "A3",
+  f: 220.0
+}, {
+  n: "B3",
+  f: 246.94
+}, {
+  n: "C4",
+  f: 261.63
+}, {
+  n: "D4",
+  f: 293.66
+}, {
+  n: "E4",
+  f: 329.63
+}, {
+  n: "F4",
+  f: 349.23
+}, {
+  n: "G4",
+  f: 392.0
+}, {
+  n: "A4",
+  f: 440.0
+}];
+const CHORDS = [{
+  n: "Am",
+  f: [220.0, 261.63, 329.63]
+}, {
+  n: "F",
+  f: [174.61, 220.0, 261.63]
+}, {
+  n: "C",
+  f: [196.0, 261.63, 329.63]
+}, {
+  n: "G",
+  f: [196.0, 246.94, 293.66]
+}];
+const BASS_VOICES = ["303 SAW", "303 SQR", "SUB", "FM"];
+const LEAD_VOICES = ["PLUCK", "SAW", "BELL", "CHIP"];
+const CHORD_VOICES = ["STAB", "PAD", "ORGAN"];
+const DELAY_TIMES = ["1/8", "3/16", "1/4"];
+const emptyDrums = () => Object.fromEntries(TRACKS.map(t => [t.id, Array(STEPS).fill(false)]));
+const nulls = () => Array(STEPS).fill(null);
+const toDrums = p => Object.fromEntries(TRACKS.map(t => [t.id, (p[t.id] || Array(STEPS).fill(0)).map(Boolean)]));
+
+// section-part presets (each preset carries all four section parts)
+const PRESETS = {
+  "FOUR ON FLOOR": {
+    drums: {
+      kick: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0],
+      clap: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+      chat: [0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0]
+    },
+    bass: nulls(),
+    lead: nulls(),
+    chord: nulls()
+  },
+  "HOUSE": {
+    drums: {
+      kick: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0],
+      clap: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1],
+      chat: [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1],
+      ohat: [0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0],
+      ride: [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0]
+    },
+    bass: [null, null, 0, null, null, null, 0, null, null, null, 0, null, null, null, 0, 2],
+    lead: nulls(),
+    chord: [null, null, 0, null, null, null, null, null, null, null, 1, null, null, null, null, null]
+  },
+  "TECHNO": {
+    drums: {
+      kick: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0],
+      snare: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+      chat: [0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0],
+      ohat: [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
+      rim: [0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0],
+      ltom: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0],
+      htom: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
+    },
+    bass: [0, null, 0, 0, null, 0, null, 3, 0, null, 0, 0, null, 0, 3, 5],
+    lead: nulls(),
+    chord: nulls()
+  },
+  "ACID": {
+    drums: {
+      kick: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0],
+      chat: [0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0],
+      cow: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0]
+    },
+    bass: [0, 0, 7, 0, 0, 5, 0, 7, 0, 0, 3, 0, 7, 0, 5, 3],
+    lead: [null, null, null, null, 7, null, null, 4, null, null, null, null, 2, null, null, null],
+    chord: nulls()
+  },
+  "BREAKDOWN": {
+    drums: {
+      chat: [0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0],
+      ride: [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0]
+    },
+    bass: nulls(),
+    lead: [4, null, null, 2, null, null, 0, null, 4, null, null, 5, null, null, 7, null],
+    chord: [0, null, null, null, null, null, null, null, 1, null, null, null, null, null, null, null]
+  }
+};
+
+// ---------- audio engine ----------
+function makeNoise(ctx) {
+  const buf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  return buf;
+}
+function makeReverbIR(ctx, seconds = 1.9, decay = 3.2) {
+  const len = Math.floor(ctx.sampleRate * seconds);
+  const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+  for (let c = 0; c < 2; c++) {
+    const d = buf.getChannelData(c);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+  }
+  return buf;
+}
+function driveCurve(amount) {
+  const k = amount * 40 + 1,
+    n = 1024,
+    curve = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const x = i / (n - 1) * 2 - 1;
+    curve[i] = (1 + k) * x / (1 + k * Math.abs(x));
+  }
+  return curve;
+}
+function createEngine(ctx) {
+  const noise = makeNoise(ctx);
+  const sum = ctx.createGain();
+  const shaper = ctx.createWaveShaper();
+  shaper.curve = driveCurve(0);
+  shaper.oversample = "2x";
+  const postDrive = ctx.createGain();
+  const lp = ctx.createBiquadFilter();
+  lp.type = "lowpass";
+  lp.frequency.value = 20000;
+  lp.Q.value = 1.2;
+  const hp = ctx.createBiquadFilter();
+  hp.type = "highpass";
+  hp.frequency.value = 12;
+  hp.Q.value = 1.2;
+  const comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -16;
+  comp.knee.value = 20;
+  comp.ratio.value = 4;
+  comp.attack.value = 0.003;
+  comp.release.value = 0.15;
+  const pump = ctx.createGain();
+  const vol = ctx.createGain();
+  vol.gain.value = 0.7;
+  sum.connect(shaper);
+  shaper.connect(postDrive);
+  postDrive.connect(lp);
+  lp.connect(hp);
+  hp.connect(comp);
+  comp.connect(pump);
+  pump.connect(vol);
+  vol.connect(ctx.destination);
+  const delay = ctx.createDelay(2.0);
+  const dFb = ctx.createGain();
+  dFb.gain.value = 0.4;
+  const dTone = ctx.createBiquadFilter();
+  dTone.type = "lowpass";
+  dTone.frequency.value = 4500;
+  const dMix = ctx.createGain();
+  dMix.gain.value = 0;
+  delay.connect(dTone);
+  dTone.connect(dFb);
+  dFb.connect(delay);
+  dTone.connect(dMix);
+  dMix.connect(sum);
+  const verb = ctx.createConvolver();
+  verb.buffer = makeReverbIR(ctx);
+  const rMix = ctx.createGain();
+  rMix.gain.value = 0;
+  verb.connect(rMix);
+  rMix.connect(sum);
+  const makeBus = () => {
+    const g = ctx.createGain();
+    g.connect(sum);
+    const sD = ctx.createGain();
+    sD.gain.value = 0;
+    g.connect(sD);
+    sD.connect(delay);
+    const sR = ctx.createGain();
+    sR.gain.value = 0;
+    g.connect(sR);
+    sR.connect(verb);
+    return {
+      in: g,
+      sD,
+      sR
+    };
+  };
+  const buses = {
+    drums: makeBus(),
+    bass: makeBus(),
+    lead: makeBus(),
+    chord: makeBus()
+  };
+  return {
+    ctx,
+    noise,
+    buses,
+    sum,
+    shaper,
+    postDrive,
+    lp,
+    hp,
+    pump,
+    delay,
+    dFb,
+    dMix,
+    rMix
+  };
+}
+function applyFx(e, fx, sends, bpm) {
+  const beat = 60 / bpm;
+  e.shaper.curve = driveCurve(fx.drive / 100);
+  e.postDrive.gain.value = 1 / (1 + fx.drive / 100 * 1.6);
+  if (fx.filter < 0) {
+    e.lp.frequency.value = 20000 * Math.pow(180 / 20000, -fx.filter / 100);
+    e.hp.frequency.value = 12;
+  } else if (fx.filter > 0) {
+    e.hp.frequency.value = 12 * Math.pow(3500 / 12, fx.filter / 100);
+    e.lp.frequency.value = 20000;
+  } else {
+    e.lp.frequency.value = 20000;
+    e.hp.frequency.value = 12;
+  }
+  const dt = fx.delayTime === "1/8" ? beat / 2 : fx.delayTime === "1/4" ? beat : beat * 0.75;
+  e.delay.delayTime.value = dt;
+  e.dFb.gain.value = fx.delayFb / 100 * 0.85;
+  e.dMix.gain.value = fx.delayMix / 100 * 0.9;
+  e.rMix.gain.value = fx.verbMix / 100 * 0.85;
+  Object.entries(e.buses).forEach(([k, b]) => {
+    b.sD.gain.value = sends[k] ? 0.45 : 0;
+    b.sR.gain.value = sends[k] ? 0.4 : 0;
+  });
+}
+
+// ---------- synthesis ----------
+function noiseSrc(ctx, noise, t, dur) {
+  const src = ctx.createBufferSource();
+  src.buffer = noise;
+  src.start(t);
+  src.stop(t + dur + 0.05);
+  return src;
+}
+function env(ctx, t, peak, dur, attack = 0) {
+  const g = ctx.createGain();
+  if (attack > 0) {
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(peak, t + attack);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  } else {
+    g.gain.setValueAtTime(peak, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  }
+  return g;
+}
+function synthKick(ctx, noise, dest, t) {
+  const osc = ctx.createOscillator();
+  osc.type = "sine";
+  osc.frequency.setValueAtTime(150, t);
+  osc.frequency.exponentialRampToValueAtTime(45, t + 0.12);
+  osc.connect(env(ctx, t, 1.0, 0.35)).connect(dest);
+  osc.start(t);
+  osc.stop(t + 0.4);
+}
+function synthSnare(ctx, noise, dest, t) {
+  const hp = ctx.createBiquadFilter();
+  hp.type = "highpass";
+  hp.frequency.value = 1800;
+  noiseSrc(ctx, noise, t, 0.2).connect(hp).connect(env(ctx, t, 0.7, 0.18)).connect(dest);
+  const osc = ctx.createOscillator();
+  osc.type = "triangle";
+  osc.frequency.value = 200;
+  osc.connect(env(ctx, t, 0.4, 0.1)).connect(dest);
+  osc.start(t);
+  osc.stop(t + 0.15);
+}
+function synthClap(ctx, noise, dest, t) {
+  [0, 0.012, 0.026].forEach((off, i) => {
+    const bp = ctx.createBiquadFilter();
+    bp.type = "bandpass";
+    bp.frequency.value = 1500;
+    bp.Q.value = 1.2;
+    noiseSrc(ctx, noise, t + off, i === 2 ? 0.22 : 0.03).connect(bp).connect(env(ctx, t + off, 0.6, i === 2 ? 0.2 : 0.03)).connect(dest);
+  });
+}
+function synthHat(ctx, noise, dest, t, open) {
+  const hp = ctx.createBiquadFilter();
+  hp.type = "highpass";
+  hp.frequency.value = open ? 7500 : 8500;
+  noiseSrc(ctx, noise, t, open ? 0.35 : 0.06).connect(hp).connect(env(ctx, t, open ? 0.4 : 0.35, open ? 0.32 : 0.05)).connect(dest);
+}
+function synthRim(ctx, noise, dest, t) {
+  const osc = ctx.createOscillator();
+  osc.type = "triangle";
+  osc.frequency.value = 420;
+  osc.connect(env(ctx, t, 0.5, 0.04)).connect(dest);
+  osc.start(t);
+  osc.stop(t + 0.06);
+  const bp = ctx.createBiquadFilter();
+  bp.type = "bandpass";
+  bp.frequency.value = 3500;
+  bp.Q.value = 2;
+  noiseSrc(ctx, noise, t, 0.03).connect(bp).connect(env(ctx, t, 0.3, 0.03)).connect(dest);
+}
+function synthTom(ctx, noise, dest, t, low) {
+  const osc = ctx.createOscillator();
+  osc.type = "sine";
+  osc.frequency.setValueAtTime(low ? 170 : 280, t);
+  osc.frequency.exponentialRampToValueAtTime(low ? 55 : 120, t + 0.12);
+  osc.connect(env(ctx, t, 0.8, low ? 0.3 : 0.22)).connect(dest);
+  osc.start(t);
+  osc.stop(t + 0.35);
+}
+function synthCowbell(ctx, noise, dest, t) {
+  const bp = ctx.createBiquadFilter();
+  bp.type = "bandpass";
+  bp.frequency.value = 2640;
+  bp.Q.value = 3;
+  const g = env(ctx, t, 0.35, 0.3);
+  [540, 800].forEach(f => {
+    const osc = ctx.createOscillator();
+    osc.type = "square";
+    osc.frequency.value = f;
+    osc.connect(bp);
+    osc.start(t);
+    osc.stop(t + 0.32);
+  });
+  bp.connect(g).connect(dest);
+}
+function synthRide(ctx, noise, dest, t) {
+  const hp = ctx.createBiquadFilter();
+  hp.type = "highpass";
+  hp.frequency.value = 6000;
+  noiseSrc(ctx, noise, t, 0.6).connect(hp).connect(env(ctx, t, 0.18, 0.55)).connect(dest);
+  const bp = ctx.createBiquadFilter();
+  bp.type = "bandpass";
+  bp.frequency.value = 9000;
+  bp.Q.value = 1.5;
+  noiseSrc(ctx, noise, t, 0.4).connect(bp).connect(env(ctx, t, 0.12, 0.4)).connect(dest);
+}
+function synthBass(ctx, noise, dest, t, freq, cutoff, res, voice) {
+  if (voice === 2) {
+    const osc = ctx.createOscillator();
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    osc.connect(env(ctx, t, 0.6, 0.38)).connect(dest);
+    osc.start(t);
+    osc.stop(t + 0.42);
+    return;
+  }
+  if (voice === 3) {
+    const car = ctx.createOscillator();
+    car.type = "sine";
+    car.frequency.value = freq;
+    const mod = ctx.createOscillator();
+    mod.type = "sine";
+    mod.frequency.value = freq * 2;
+    const mg = ctx.createGain();
+    mg.gain.setValueAtTime(freq * 3, t);
+    mg.gain.exponentialRampToValueAtTime(freq * 0.3, t + 0.2);
+    mod.connect(mg).connect(car.frequency);
+    car.connect(env(ctx, t, 0.5, 0.3)).connect(dest);
+    car.start(t);
+    car.stop(t + 0.34);
+    mod.start(t);
+    mod.stop(t + 0.34);
+    return;
+  }
+  const osc = ctx.createOscillator();
+  osc.type = voice === 1 ? "square" : "sawtooth";
+  osc.frequency.value = freq;
+  const f = ctx.createBiquadFilter();
+  f.type = "lowpass";
+  f.Q.value = res;
+  f.frequency.setValueAtTime(cutoff, t);
+  f.frequency.exponentialRampToValueAtTime(Math.max(180, cutoff * 0.12), t + 0.22);
+  osc.connect(f).connect(env(ctx, t, voice === 1 ? 0.38 : 0.45, 0.28)).connect(dest);
+  osc.start(t);
+  osc.stop(t + 0.32);
+}
+function synthLead(ctx, noise, dest, t, freq, level, voice) {
+  if (voice === 1) {
+    const osc = ctx.createOscillator();
+    osc.type = "sawtooth";
+    osc.frequency.value = freq;
+    const f = ctx.createBiquadFilter();
+    f.type = "lowpass";
+    f.Q.value = 3;
+    f.frequency.setValueAtTime(3800, t);
+    f.frequency.exponentialRampToValueAtTime(700, t + 0.28);
+    osc.connect(f).connect(env(ctx, t, 0.26 * level, 0.3)).connect(dest);
+    osc.start(t);
+    osc.stop(t + 0.34);
+    return;
+  }
+  if (voice === 2) {
+    const car = ctx.createOscillator();
+    car.type = "sine";
+    car.frequency.value = freq;
+    const mod = ctx.createOscillator();
+    mod.type = "sine";
+    mod.frequency.value = freq * 3.01;
+    const mg = ctx.createGain();
+    mg.gain.setValueAtTime(freq * 2.5, t);
+    mg.gain.exponentialRampToValueAtTime(1, t + 0.25);
+    mod.connect(mg).connect(car.frequency);
+    car.connect(env(ctx, t, 0.24 * level, 0.55)).connect(dest);
+    car.start(t);
+    car.stop(t + 0.6);
+    mod.start(t);
+    mod.stop(t + 0.6);
+    return;
+  }
+  if (voice === 3) {
+    const osc = ctx.createOscillator();
+    osc.type = "square";
+    osc.frequency.value = freq;
+    osc.connect(env(ctx, t, 0.2 * level, 0.12)).connect(dest);
+    osc.start(t);
+    osc.stop(t + 0.15);
+    return;
+  }
+  const osc = ctx.createOscillator();
+  osc.type = "square";
+  osc.frequency.value = freq;
+  const f = ctx.createBiquadFilter();
+  f.type = "lowpass";
+  f.frequency.value = 3200;
+  f.Q.value = 2;
+  osc.connect(f).connect(env(ctx, t, 0.28 * level, 0.18)).connect(dest);
+  osc.start(t);
+  osc.stop(t + 0.22);
+}
+function synthChord(ctx, noise, dest, t, freqs, level, voice) {
+  if (voice === 1) {
+    const f = ctx.createBiquadFilter();
+    f.type = "lowpass";
+    f.frequency.value = 1900;
+    f.Q.value = 0.8;
+    const g = env(ctx, t, 0.3 * level, 1.15, 0.14);
+    freqs.forEach(fr => {
+      [-6, 6].forEach(cents => {
+        const osc = ctx.createOscillator();
+        osc.type = "sawtooth";
+        osc.frequency.value = fr;
+        osc.detune.value = cents;
+        const og = ctx.createGain();
+        og.gain.value = 0.15;
+        osc.connect(og).connect(f);
+        osc.start(t);
+        osc.stop(t + 1.25);
+      });
+    });
+    f.connect(g).connect(dest);
+    return;
+  }
+  if (voice === 2) {
+    const g = env(ctx, t, 0.4 * level, 0.35);
+    freqs.forEach(fr => {
+      [[fr, 0.14], [fr * 2, 0.07]].forEach(([f2, amp]) => {
+        const osc = ctx.createOscillator();
+        osc.type = "sine";
+        osc.frequency.value = f2;
+        const og = ctx.createGain();
+        og.gain.value = amp;
+        osc.connect(og).connect(g);
+        osc.start(t);
+        osc.stop(t + 0.4);
+      });
+    });
+    g.connect(dest);
+    return;
+  }
+  const f = ctx.createBiquadFilter();
+  f.type = "lowpass";
+  f.Q.value = 1;
+  f.frequency.setValueAtTime(2600, t);
+  f.frequency.exponentialRampToValueAtTime(700, t + 0.3);
+  const g = env(ctx, t, 0.5 * level, 0.38);
+  freqs.forEach(fr => {
+    [-4, 4].forEach(cents => {
+      const osc = ctx.createOscillator();
+      osc.type = "sawtooth";
+      osc.frequency.value = fr;
+      osc.detune.value = cents;
+      const og = ctx.createGain();
+      og.gain.value = 0.16;
+      osc.connect(og).connect(f);
+      osc.start(t);
+      osc.stop(t + 0.42);
+    });
+  });
+  f.connect(g).connect(dest);
+}
+function triggerDrum(ctx, noise, dest, id, t) {
+  if (id === "kick") synthKick(ctx, noise, dest, t);else if (id === "snare") synthSnare(ctx, noise, dest, t);else if (id === "clap") synthClap(ctx, noise, dest, t);else if (id === "rim") synthRim(ctx, noise, dest, t);else if (id === "chat") synthHat(ctx, noise, dest, t, false);else if (id === "ohat") synthHat(ctx, noise, dest, t, true);else if (id === "ltom") synthTom(ctx, noise, dest, t, true);else if (id === "htom") synthTom(ctx, noise, dest, t, false);else if (id === "cow") synthCowbell(ctx, noise, dest, t);else if (id === "ride") synthRide(ctx, noise, dest, t);
+}
+
+// parts = { drums: drumGrid|null, bass: notes|null, lead: notes|null, chord: notes|null }
+function scheduleStepInto(e, parts, step, t, mutedMap, p) {
+  if (parts.drums) TRACKS.forEach(({
+    id
+  }) => {
+    if (parts.drums[id][step] && !mutedMap[id]) triggerDrum(e.ctx, e.noise, e.buses.drums.in, id, t);
+  });
+  if (parts.bass && parts.bass[step] !== null && !mutedMap.bass) synthBass(e.ctx, e.noise, e.buses.bass.in, t, BASS_NOTES[parts.bass[step]].f, p.cutoff, p.res, p.bassVoice);
+  if (parts.lead && parts.lead[step] !== null && !mutedMap.lead) synthLead(e.ctx, e.noise, e.buses.lead.in, t, LEAD_NOTES[parts.lead[step]].f, p.leadLevel / 100, p.leadVoice);
+  if (parts.chord && parts.chord[step] !== null && !mutedMap.chord) synthChord(e.ctx, e.noise, e.buses.chord.in, t, CHORDS[parts.chord[step]].f, p.chordLevel / 100, p.chordVoice);
+}
+function schedulePump(e, t, beatDur, depth) {
+  if (depth <= 0) return;
+  e.pump.gain.setValueAtTime(1 - depth * 0.85, t);
+  e.pump.gain.linearRampToValueAtTime(1, t + beatDur * 0.72);
+}
+
+// ---------- WAV encoding ----------
+function bufferToWav(abuf) {
+  const numCh = abuf.numberOfChannels,
+    len = abuf.length * numCh * 2 + 44;
+  const view = new DataView(new ArrayBuffer(len));
+  const w = (o, s) => {
+    for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i));
+  };
+  w(0, "RIFF");
+  view.setUint32(4, len - 8, true);
+  w(8, "WAVE");
+  w(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, numCh, true);
+  view.setUint32(24, abuf.sampleRate, true);
+  view.setUint32(28, abuf.sampleRate * numCh * 2, true);
+  view.setUint16(32, numCh * 2, true);
+  view.setUint16(34, 16, true);
+  w(36, "data");
+  view.setUint32(40, len - 44, true);
+  let off = 44;
+  const chans = Array.from({
+    length: numCh
+  }, (_, c) => abuf.getChannelData(c));
+  for (let i = 0; i < abuf.length; i++) for (let c = 0; c < numCh; c++) {
+    const s = Math.max(-1, Math.min(1, chans[c][i]));
+    view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+    off += 2;
+  }
+  return new Blob([view], {
+    type: "audio/wav"
+  });
+}
+
+// ---------- component ----------
+function TrackMaker() {
+  const [patterns, setPatterns] = useState({
+    drums: {
+      A: toDrums(PRESETS["HOUSE"].drums),
+      B: toDrums(PRESETS["TECHNO"].drums),
+      C: toDrums(PRESETS["BREAKDOWN"].drums),
+      D: emptyDrums()
+    },
+    bass: {
+      A: [...PRESETS["HOUSE"].bass],
+      B: [...PRESETS["ACID"].bass],
+      C: nulls(),
+      D: nulls()
+    },
+    lead: {
+      A: [...PRESETS["ACID"].lead],
+      B: [...PRESETS["BREAKDOWN"].lead],
+      C: nulls(),
+      D: nulls()
+    },
+    chord: {
+      A: [...PRESETS["HOUSE"].chord],
+      B: [...PRESETS["BREAKDOWN"].chord],
+      C: nulls(),
+      D: nulls()
+    }
+  });
+  const [editSel, setEditSel] = useState({
+    drums: "A",
+    bass: "A",
+    lead: "A",
+    chord: "A"
+  });
+  const [mode, setMode] = useState("PATTERN"); // PATTERN | SONG
+  const [song, setSong] = useState({
+    drums: ["A", "A", "A", "A", "A", "A", "A", "A", "B", "B", "B", "B", "A", "A", "B", "B"],
+    bass: [null, null, null, null, "A", "A", "A", "A", "B", "B", "B", "B", "B", "B", "B", "B"],
+    lead: [null, null, null, null, null, null, "A", "A", null, null, null, null, "A", "A", "A", "A"],
+    chord: ["A", "A", "A", "A", "A", "A", "A", "A", null, null, null, null, "A", "A", "A", "A"]
+  });
+  const [playing, setPlaying] = useState(false);
+  const [bpm, setBpm] = useState(126);
+  const [swing, setSwing] = useState(0);
+  const [cutoff, setCutoff] = useState(1400);
+  const [res, setRes] = useState(8);
+  const [leadLevel, setLeadLevel] = useState(80);
+  const [chordLevel, setChordLevel] = useState(70);
+  const [voices, setVoices] = useState({
+    bass: 0,
+    lead: 0,
+    chord: 0
+  });
+  const [fx, setFx] = useState({
+    drive: 0,
+    filter: 0,
+    delayMix: 0,
+    delayFb: 45,
+    delayTime: "3/16",
+    verbMix: 0,
+    pump: 0
+  });
+  const [sends, setSends] = useState({
+    drums: false,
+    bass: false,
+    lead: true,
+    chord: true
+  });
+  const [muted, setMuted] = useState({});
+  const [open, setOpen] = useState({
+    drums: true,
+    bass: true,
+    lead: false,
+    chord: false,
+    fx: false
+  });
+  const [playhead, setPlayhead] = useState(-1);
+  const [playingPats, setPlayingPats] = useState({});
+  const [playingBar, setPlayingBar] = useState(-1);
+  const [exporting, setExporting] = useState(false);
+  const engineRef = useRef(null);
+  const patternsRef = useRef(patterns),
+    editSelRef = useRef(editSel);
+  const modeRef = useRef(mode),
+    songRef = useRef(song);
+  const mutedRef = useRef(muted),
+    bpmRef = useRef(bpm),
+    swingRef = useRef(swing);
+  const paramsRef = useRef({}),
+    fxRef = useRef(fx),
+    sendsRef = useRef(sends);
+  const stepRef = useRef(0),
+    barRef = useRef(0),
+    nextTimeRef = useRef(0);
+  const timerRef = useRef(null),
+    queueRef = useRef([]),
+    rafRef = useRef(null);
+  useEffect(() => {
+    patternsRef.current = patterns;
+  }, [patterns]);
+  useEffect(() => {
+    editSelRef.current = editSel;
+  }, [editSel]);
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
+  useEffect(() => {
+    songRef.current = song;
+  }, [song]);
+  useEffect(() => {
+    mutedRef.current = muted;
+  }, [muted]);
+  useEffect(() => {
+    bpmRef.current = bpm;
+  }, [bpm]);
+  useEffect(() => {
+    swingRef.current = swing;
+  }, [swing]);
+  useEffect(() => {
+    paramsRef.current = {
+      cutoff,
+      res,
+      leadLevel,
+      chordLevel,
+      bassVoice: voices.bass,
+      leadVoice: voices.lead,
+      chordVoice: voices.chord
+    };
+  }, [cutoff, res, leadLevel, chordLevel, voices]);
+  useEffect(() => {
+    fxRef.current = fx;
+  }, [fx]);
+  useEffect(() => {
+    sendsRef.current = sends;
+  }, [sends]);
+  useEffect(() => {
+    if (engineRef.current) applyFx(engineRef.current, fx, sends, bpm);
+  }, [fx, sends, bpm]);
+  const getEngine = () => {
+    if (!engineRef.current) {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      engineRef.current = createEngine(ctx);
+      applyFx(engineRef.current, fxRef.current, sendsRef.current, bpmRef.current);
+    }
+    return engineRef.current;
+  };
+  const songLen = s => {
+    let last = -1;
+    SECTIONS.forEach(k => s[k].forEach((v, i) => {
+      if (v !== null && i > last) last = i;
+    }));
+    return Math.max(1, last + 1);
+  };
+  const partsForBar = (pats, s, bar) => {
+    const parts = {};
+    SECTIONS.forEach(k => {
+      const pk = s[k][bar];
+      parts[k] = pk ? pats[k][pk] : null;
+    });
+    return parts;
+  };
+  const partsForEditSel = (pats, es) => {
+    const parts = {};
+    SECTIONS.forEach(k => {
+      parts[k] = pats[k][es[k]];
+    });
+    return parts;
+  };
+
+  // ---------- live scheduler ----------
+  const schedule = useCallback(() => {
+    const e = engineRef.current;
+    const stepDur = 60 / bpmRef.current / 4;
+    while (nextTimeRef.current < e.ctx.currentTime + 0.12) {
+      const step = stepRef.current;
+      let parts,
+        patKeys = null,
+        bar = barRef.current;
+      if (modeRef.current === "SONG") {
+        const s = songRef.current;
+        const b = bar % songLen(s);
+        parts = partsForBar(patternsRef.current, s, b);
+        patKeys = Object.fromEntries(SECTIONS.map(k => [k, s[k][b]]));
+      } else {
+        parts = partsForEditSel(patternsRef.current, editSelRef.current);
+      }
+      let t = nextTimeRef.current;
+      if (step % 2 === 1) t += swingRef.current / 100 * stepDur * 0.6;
+      if (step % 4 === 0) schedulePump(e, nextTimeRef.current, stepDur * 4, fxRef.current.pump / 100);
+      scheduleStepInto(e, parts, step, t, mutedRef.current, paramsRef.current);
+      queueRef.current.push({
+        step,
+        bar,
+        patKeys,
+        time: nextTimeRef.current
+      });
+      nextTimeRef.current += stepDur;
+      if (step === STEPS - 1) barRef.current += 1;
+      stepRef.current = (step + 1) % STEPS;
+    }
+  }, []);
+  const draw = useCallback(() => {
+    const e = engineRef.current;
+    if (e) {
+      let s = null;
+      while (queueRef.current.length && queueRef.current[0].time <= e.ctx.currentTime) s = queueRef.current.shift();
+      if (s) {
+        setPlayhead(s.step);
+        setPlayingBar(s.bar);
+        if (s.patKeys) setPlayingPats(s.patKeys);
+      }
+    }
+    rafRef.current = requestAnimationFrame(draw);
+  }, []);
+  const start = () => {
+    const e = getEngine();
+    if (e.ctx.state === "suspended") e.ctx.resume();
+    stepRef.current = 0;
+    barRef.current = 0;
+    nextTimeRef.current = e.ctx.currentTime + 0.06;
+    queueRef.current = [];
+    timerRef.current = setInterval(schedule, 25);
+    rafRef.current = requestAnimationFrame(draw);
+    setPlaying(true);
+  };
+  const stop = () => {
+    clearInterval(timerRef.current);
+    cancelAnimationFrame(rafRef.current);
+    queueRef.current = [];
+    setPlayhead(-1);
+    setPlayingBar(-1);
+    setPlayingPats({});
+    setPlaying(false);
+  };
+  useEffect(() => () => {
+    clearInterval(timerRef.current);
+    cancelAnimationFrame(rafRef.current);
+  }, []);
+
+  // ---------- WAV export ----------
+  const exportWav = async () => {
+    setExporting(true);
+    try {
+      const stepDur = 60 / bpm / 4;
+      const bars = mode === "SONG" ? songLen(song) : 1;
+      const dur = bars * STEPS * stepDur + 1.4;
+      const off = new OfflineAudioContext(2, Math.ceil(dur * 44100), 44100);
+      const e = createEngine(off);
+      applyFx(e, fx, sends, bpm);
+      const p = paramsRef.current;
+      for (let bar = 0; bar < bars; bar++) {
+        const parts = mode === "SONG" ? partsForBar(patterns, song, bar) : partsForEditSel(patterns, editSel);
+        for (let step = 0; step < STEPS; step++) {
+          const base = (bar * STEPS + step) * stepDur + 0.02;
+          let t = base;
+          if (step % 2 === 1) t += swing / 100 * stepDur * 0.6;
+          if (step % 4 === 0) schedulePump(e, base, stepDur * 4, fx.pump / 100);
+          scheduleStepInto(e, parts, step, t, muted, p);
+        }
+      }
+      const rendered = await off.startRendering();
+      const url = URL.createObjectURL(bufferToWav(rendered));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = mode === "SONG" ? "track.wav" : "pattern.wav";
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // ---------- interactions ----------
+  const audition = fn => {
+    if (playing) return;
+    const e = getEngine();
+    if (e.ctx.state === "suspended") e.ctx.resume();
+    fn(e, e.ctx.currentTime + 0.01);
+  };
+  const toggleCell = (id, i) => setPatterns(ps => {
+    const key = editSel.drums;
+    const grid = Object.fromEntries(TRACKS.map(t => [t.id, [...ps.drums[key][t.id]]]));
+    grid[id][i] = !grid[id][i];
+    if (grid[id][i]) audition((e, t) => triggerDrum(e.ctx, e.noise, e.buses.drums.in, id, t));
+    return {
+      ...ps,
+      drums: {
+        ...ps.drums,
+        [key]: grid
+      }
+    };
+  });
+  const toggleNote = (secKey, i, row) => setPatterns(ps => {
+    const key = editSel[secKey];
+    const arr = [...ps[secKey][key]];
+    arr[i] = arr[i] === row ? null : row;
+    if (arr[i] !== null) {
+      const pr = paramsRef.current;
+      if (secKey === "bass") audition((e, t) => synthBass(e.ctx, e.noise, e.buses.bass.in, t, BASS_NOTES[row].f, pr.cutoff, pr.res, pr.bassVoice));
+      if (secKey === "lead") audition((e, t) => synthLead(e.ctx, e.noise, e.buses.lead.in, t, LEAD_NOTES[row].f, pr.leadLevel / 100, pr.leadVoice));
+      if (secKey === "chord") audition((e, t) => synthChord(e.ctx, e.noise, e.buses.chord.in, t, CHORDS[row].f, pr.chordLevel / 100, pr.chordVoice));
+    }
+    return {
+      ...ps,
+      [secKey]: {
+        ...ps[secKey],
+        [key]: arr
+      }
+    };
+  });
+  const cycleSongSlot = (secKey, i) => setSong(s => {
+    const row = [...s[secKey]];
+    const order = [...PAT_KEYS, null];
+    row[i] = order[(order.indexOf(row[i]) + 1) % order.length];
+    return {
+      ...s,
+      [secKey]: row
+    };
+  });
+  const copySection = (secKey, target) => setPatterns(ps => {
+    const src = ps[secKey][editSel[secKey]];
+    const copy = secKey === "drums" ? Object.fromEntries(TRACKS.map(t => [t.id, [...src[t.id]]])) : [...src];
+    return {
+      ...ps,
+      [secKey]: {
+        ...ps[secKey],
+        [target]: copy
+      }
+    };
+  });
+  const clearSection = secKey => setPatterns(ps => ({
+    ...ps,
+    [secKey]: {
+      ...ps[secKey],
+      [editSel[secKey]]: secKey === "drums" ? emptyDrums() : nulls()
+    }
+  }));
+  const loadPreset = name => setPatterns(ps => ({
+    drums: {
+      ...ps.drums,
+      [editSel.drums]: toDrums(PRESETS[name].drums)
+    },
+    bass: {
+      ...ps.bass,
+      [editSel.bass]: [...PRESETS[name].bass]
+    },
+    lead: {
+      ...ps.lead,
+      [editSel.lead]: [...PRESETS[name].lead]
+    },
+    chord: {
+      ...ps.chord,
+      [editSel.chord]: [...PRESETS[name].chord]
+    }
+  }));
+  const toggleMute = id => setMuted(m => ({
+    ...m,
+    [id]: !m[id]
+  }));
+  const toggleOpen = k => setOpen(o => ({
+    ...o,
+    [k]: !o[k]
+  }));
+  const toggleSend = k => setSends(s => ({
+    ...s,
+    [k]: !s[k]
+  }));
+  const showHeadFor = secKey => playing && (mode === "PATTERN" || playingPats[secKey] === editSel[secKey]);
+
+  // ---------- styles ----------
+  const S = {
+    root: {
+      minHeight: "100vh",
+      background: "#101013",
+      display: "flex",
+      alignItems: "flex-start",
+      justifyContent: "center",
+      padding: "16px 8px 40px",
+      fontFamily: "ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, monospace",
+      color: "#e8e6e0"
+    },
+    panel: {
+      width: "100%",
+      maxWidth: 840,
+      background: "linear-gradient(180deg,#1d1d22,#17171b)",
+      border: "1px solid #2c2c33",
+      borderRadius: 10,
+      padding: "18px 14px 20px",
+      boxShadow: "0 12px 40px rgba(0,0,0,.5)"
+    },
+    header: {
+      display: "flex",
+      alignItems: "baseline",
+      justifyContent: "space-between",
+      marginBottom: 14,
+      paddingBottom: 12,
+      borderBottom: "1px solid #2c2c33"
+    },
+    title: {
+      fontSize: 15,
+      letterSpacing: "0.25em",
+      fontWeight: 700
+    },
+    sub: {
+      fontSize: 10,
+      letterSpacing: "0.2em",
+      color: "#6f6f7a"
+    },
+    transport: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 10,
+      alignItems: "center",
+      marginBottom: 12
+    },
+    playBtn: on => ({
+      width: 64,
+      height: 40,
+      borderRadius: 6,
+      border: `1px solid ${on ? "#ff5d3a" : "#3a3a44"}`,
+      background: on ? "rgba(255,93,58,.18)" : "#232329",
+      color: on ? "#ff5d3a" : "#e8e6e0",
+      fontFamily: "inherit",
+      fontSize: 11,
+      letterSpacing: "0.15em",
+      cursor: "pointer",
+      boxShadow: on ? "0 0 14px rgba(255,93,58,.35)" : "none"
+    }),
+    knob: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 4,
+      flex: 1,
+      minWidth: 100
+    },
+    knobLabel: {
+      fontSize: 9,
+      letterSpacing: "0.2em",
+      color: "#8b8b96",
+      display: "flex",
+      justifyContent: "space-between"
+    },
+    patBar: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 6,
+      alignItems: "center",
+      marginBottom: 12
+    },
+    patBtn: active => ({
+      padding: "8px 10px",
+      borderRadius: 6,
+      border: `1px solid ${active ? "#ffb03a" : "#3a3a44"}`,
+      background: active ? "rgba(255,176,58,.15)" : "#232329",
+      color: active ? "#ffb03a" : "#c9c7c0",
+      fontFamily: "inherit",
+      fontSize: 10,
+      letterSpacing: "0.1em",
+      cursor: "pointer"
+    }),
+    miniPat: (active, live, c) => ({
+      minWidth: 26,
+      padding: "5px 6px",
+      borderRadius: 5,
+      border: `1px solid ${active ? c : "#3a3a44"}`,
+      background: active ? `${c}22` : "#232329",
+      color: active ? c : "#8b8b96",
+      fontFamily: "inherit",
+      fontSize: 9,
+      letterSpacing: "0.05em",
+      cursor: "pointer",
+      boxShadow: live ? `0 0 8px ${c}66` : "none"
+    }),
+    smallBtn: {
+      padding: "6px 8px",
+      borderRadius: 5,
+      border: "1px solid #3a3a44",
+      background: "#232329",
+      color: "#c9c7c0",
+      fontFamily: "inherit",
+      fontSize: 8,
+      letterSpacing: "0.1em",
+      cursor: "pointer"
+    },
+    voiceBtn: (active, c) => ({
+      padding: "6px 8px",
+      borderRadius: 5,
+      border: `1px solid ${active ? c : "#3a3a44"}`,
+      background: active ? `${c}22` : "#232329",
+      color: active ? c : "#8b8b96",
+      fontFamily: "inherit",
+      fontSize: 8,
+      letterSpacing: "0.1em",
+      cursor: "pointer"
+    }),
+    row: {
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      marginBottom: 5
+    },
+    label: (c, m) => ({
+      width: 54,
+      flexShrink: 0,
+      fontSize: 8,
+      letterSpacing: "0.06em",
+      color: m ? "#55555e" : c,
+      display: "flex",
+      alignItems: "center",
+      gap: 4
+    }),
+    muteBtn: m => ({
+      width: 18,
+      height: 14,
+      borderRadius: 3,
+      flexShrink: 0,
+      border: `1px solid ${m ? "#ff5d3a" : "#3a3a44"}`,
+      background: m ? "rgba(255,93,58,.2)" : "transparent",
+      color: m ? "#ff5d3a" : "#6f6f7a",
+      fontSize: 8,
+      fontFamily: "inherit",
+      cursor: "pointer",
+      padding: 0,
+      lineHeight: 1
+    }),
+    sendBtn: on => ({
+      width: 24,
+      height: 14,
+      borderRadius: 3,
+      flexShrink: 0,
+      border: `1px solid ${on ? "#7ee08a" : "#3a3a44"}`,
+      background: on ? "rgba(126,224,138,.15)" : "transparent",
+      color: on ? "#7ee08a" : "#6f6f7a",
+      fontSize: 7,
+      fontFamily: "inherit",
+      cursor: "pointer",
+      padding: 0,
+      lineHeight: 1
+    }),
+    grid: {
+      display: "flex",
+      flex: 1,
+      gap: 3
+    },
+    cell: (active, isHead, c, gap, h) => ({
+      flex: 1,
+      minWidth: 0,
+      borderRadius: 4,
+      ...(h ? {
+        height: h
+      } : {
+        aspectRatio: "1 / 1"
+      }),
+      border: `1px solid ${active ? c : "#2f2f37"}`,
+      background: active ? isHead ? c : `${c}33` : isHead ? "#2c2c34" : "#1c1c21",
+      boxShadow: active && isHead ? `0 0 10px ${c}` : "none",
+      cursor: "pointer",
+      padding: 0,
+      marginLeft: gap ? 7 : 0,
+      transition: "background 60ms linear"
+    }),
+    stepnums: {
+      display: "flex",
+      gap: 3,
+      marginLeft: 60,
+      marginBottom: 6
+    },
+    stepnum: (i, isHead) => ({
+      flex: 1,
+      textAlign: "center",
+      fontSize: 8,
+      color: isHead ? "#ffb03a" : "#55555e",
+      marginLeft: i % 4 === 0 && i !== 0 ? 7 : 0
+    }),
+    sectionHead: c => ({
+      width: "100%",
+      textAlign: "left",
+      marginTop: 12,
+      marginBottom: 8,
+      padding: "8px 10px",
+      borderRadius: 6,
+      border: "1px solid #2c2c33",
+      background: "#1b1b20",
+      color: c,
+      fontFamily: "inherit",
+      fontSize: 10,
+      letterSpacing: "0.2em",
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      gap: 8
+    }),
+    sectionCtrls: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 10,
+      alignItems: "center",
+      marginBottom: 8,
+      paddingLeft: 2
+    },
+    songLabel: c => ({
+      width: 54,
+      flexShrink: 0,
+      fontSize: 8,
+      letterSpacing: "0.06em",
+      color: c
+    }),
+    songSlot: (patKey, isPlaying) => ({
+      flex: 1,
+      minWidth: 0,
+      height: 28,
+      borderRadius: 5,
+      border: `1px solid ${isPlaying ? "#ffb03a" : patKey ? "#3f3f4a" : "#26262d"}`,
+      background: patKey ? `${PAT_COLORS[patKey]}1e` : "#191920",
+      color: patKey ? PAT_COLORS[patKey] : "#3f3f4a",
+      fontFamily: "inherit",
+      fontSize: 10,
+      letterSpacing: "0.05em",
+      cursor: "pointer",
+      padding: 0
+    }),
+    presets: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 8,
+      marginTop: 16,
+      alignItems: "center"
+    }
+  };
+  const drumCellH = 22;
+  const sectionPatternBar = secKey => {
+    const c = SECTION_META[secKey].color;
+    return /*#__PURE__*/_jsxDEV("div", {
+      style: {
+        display: "flex",
+        gap: 4,
+        alignItems: "center",
+        flexWrap: "wrap"
+      },
+      children: [/*#__PURE__*/_jsxDEV("span", {
+        style: {
+          ...S.sub,
+          fontSize: 8
+        },
+        children: "PTN"
+      }, void 0, false), PAT_KEYS.map(k => /*#__PURE__*/_jsxDEV("button", {
+        style: S.miniPat(editSel[secKey] === k, playing && mode === "SONG" && playingPats[secKey] === k, c),
+        onClick: () => setEditSel(es => ({
+          ...es,
+          [secKey]: k
+        })),
+        children: k
+      }, k, false)), /*#__PURE__*/_jsxDEV("span", {
+        style: {
+          ...S.sub,
+          fontSize: 8,
+          marginLeft: 4
+        },
+        children: "COPY→"
+      }, void 0, false), PAT_KEYS.filter(k => k !== editSel[secKey]).map(k => /*#__PURE__*/_jsxDEV("button", {
+        style: S.smallBtn,
+        onClick: () => copySection(secKey, k),
+        children: k
+      }, k, false)), /*#__PURE__*/_jsxDEV("button", {
+        style: {
+          ...S.smallBtn,
+          color: "#ff5d3a",
+          borderColor: "#4a2a24",
+          marginLeft: 4
+        },
+        onClick: () => clearSection(secKey),
+        children: "CLR"
+      }, void 0, false)]
+    }, void 0, true);
+  };
+  const sectionHeader = (secKey, extraLabel) => {
+    const {
+      label,
+      color
+    } = SECTION_META[secKey];
+    return /*#__PURE__*/_jsxDEV("button", {
+      style: S.sectionHead(color),
+      onClick: () => toggleOpen(secKey),
+      children: [/*#__PURE__*/_jsxDEV("span", {
+        children: open[secKey] ? "▾" : "▸"
+      }, void 0, false), " ", label, /*#__PURE__*/_jsxDEV("span", {
+        style: {
+          fontSize: 8,
+          color: "#6f6f7a"
+        },
+        children: ["PTN ", editSel[secKey], extraLabel ? ` · ${extraLabel}` : ""]
+      }, void 0, true), /*#__PURE__*/_jsxDEV("span", {
+        style: {
+          marginLeft: "auto",
+          display: "flex",
+          gap: 4
+        },
+        children: [/*#__PURE__*/_jsxDEV("button", {
+          style: S.sendBtn(sends[secKey]),
+          title: "FX send",
+          onClick: e => {
+            e.stopPropagation();
+            toggleSend(secKey);
+          },
+          children: "FX"
+        }, void 0, false), secKey !== "drums" && /*#__PURE__*/_jsxDEV("button", {
+          style: S.muteBtn(muted[secKey]),
+          onClick: e => {
+            e.stopPropagation();
+            toggleMute(secKey);
+          },
+          children: "M"
+        }, void 0, false)]
+      }, void 0, true)]
+    }, void 0, true);
+  };
+  const noteRows = (secKey, notes, cellH) => {
+    const c = SECTION_META[secKey].color;
+    const cur = patterns[secKey][editSel[secKey]];
+    const head = showHeadFor(secKey);
+    if (secKey === "chord") return CHORDS.map((ch, row) => /*#__PURE__*/_jsxDEV("div", {
+      style: {
+        ...S.row,
+        marginBottom: 3
+      },
+      children: [/*#__PURE__*/_jsxDEV("div", {
+        style: S.label(c, muted[secKey]),
+        children: /*#__PURE__*/_jsxDEV("span", {
+          children: ch.n
+        }, void 0, false)
+      }, void 0, false), /*#__PURE__*/_jsxDEV("div", {
+        style: S.grid,
+        children: cur.map((note, i) => /*#__PURE__*/_jsxDEV("button", {
+          style: S.cell(note === row, head && playhead === i, c, i % 4 === 0 && i !== 0, cellH),
+          onClick: () => toggleNote(secKey, i, row)
+        }, i, false))
+      }, void 0, false)]
+    }, row, true));
+    return [...notes].map((_, idx) => {
+      const row = notes.length - 1 - idx;
+      return /*#__PURE__*/_jsxDEV("div", {
+        style: {
+          ...S.row,
+          marginBottom: 3
+        },
+        children: [/*#__PURE__*/_jsxDEV("div", {
+          style: S.label(c, muted[secKey]),
+          children: /*#__PURE__*/_jsxDEV("span", {
+            children: notes[row].n
+          }, void 0, false)
+        }, void 0, false), /*#__PURE__*/_jsxDEV("div", {
+          style: S.grid,
+          children: cur.map((note, i) => /*#__PURE__*/_jsxDEV("button", {
+            style: S.cell(note === row, head && playhead === i, c, i % 4 === 0 && i !== 0, cellH),
+            onClick: () => toggleNote(secKey, i, row)
+          }, i, false))
+        }, void 0, false)]
+      }, row, true);
+    });
+  };
+  return /*#__PURE__*/_jsxDEV("div", {
+    style: S.root,
+    children: /*#__PURE__*/_jsxDEV("div", {
+      style: S.panel,
+      children: [/*#__PURE__*/_jsxDEV("div", {
+        style: S.header,
+        children: [/*#__PURE__*/_jsxDEV("div", {
+          style: S.title,
+          children: "STEP SEQ · 16"
+        }, void 0, false), /*#__PURE__*/_jsxDEV("div", {
+          style: S.sub,
+          children: "DANCE TRACK MAKER v5"
+        }, void 0, false)]
+      }, void 0, true), /*#__PURE__*/_jsxDEV("div", {
+        style: S.transport,
+        children: [/*#__PURE__*/_jsxDEV("button", {
+          style: S.playBtn(playing),
+          onClick: playing ? stop : start,
+          children: playing ? "■ STOP" : "▶ PLAY"
+        }, void 0, false), /*#__PURE__*/_jsxDEV("div", {
+          style: S.knob,
+          children: [/*#__PURE__*/_jsxDEV("div", {
+            style: S.knobLabel,
+            children: [/*#__PURE__*/_jsxDEV("span", {
+              children: "TEMPO"
+            }, void 0, false), /*#__PURE__*/_jsxDEV("span", {
+              children: [bpm, " BPM"]
+            }, void 0, true)]
+          }, void 0, true), /*#__PURE__*/_jsxDEV("input", {
+            type: "range",
+            min: 90,
+            max: 160,
+            value: bpm,
+            onChange: e => setBpm(+e.target.value),
+            style: {
+              width: "100%",
+              accentColor: "#ffb03a"
+            }
+          }, void 0, false)]
+        }, void 0, true), /*#__PURE__*/_jsxDEV("div", {
+          style: S.knob,
+          children: [/*#__PURE__*/_jsxDEV("div", {
+            style: S.knobLabel,
+            children: [/*#__PURE__*/_jsxDEV("span", {
+              children: "SWING"
+            }, void 0, false), /*#__PURE__*/_jsxDEV("span", {
+              children: [swing, "%"]
+            }, void 0, true)]
+          }, void 0, true), /*#__PURE__*/_jsxDEV("input", {
+            type: "range",
+            min: 0,
+            max: 60,
+            value: swing,
+            onChange: e => setSwing(+e.target.value),
+            style: {
+              width: "100%",
+              accentColor: "#ffb03a"
+            }
+          }, void 0, false)]
+        }, void 0, true)]
+      }, void 0, true), /*#__PURE__*/_jsxDEV("div", {
+        style: S.patBar,
+        children: [/*#__PURE__*/_jsxDEV("button", {
+          style: S.patBtn(mode === "PATTERN"),
+          onClick: () => setMode("PATTERN"),
+          children: "PATTERN"
+        }, void 0, false), /*#__PURE__*/_jsxDEV("button", {
+          style: S.patBtn(mode === "SONG"),
+          onClick: () => setMode("SONG"),
+          children: "SONG"
+        }, void 0, false), mode === "PATTERN" && /*#__PURE__*/_jsxDEV("span", {
+          style: {
+            ...S.sub,
+            fontSize: 8
+          },
+          children: ["PLAYING ", SECTIONS.map(k => `${SECTION_META[k].label[0]}:${editSel[k]}`).join(" ")]
+        }, void 0, true), /*#__PURE__*/_jsxDEV("button", {
+          style: {
+            ...S.smallBtn,
+            marginLeft: "auto",
+            padding: "8px 10px",
+            fontSize: 9,
+            color: exporting ? "#6f6f7a" : "#7ee08a",
+            borderColor: "#2a4a30"
+          },
+          onClick: exportWav,
+          disabled: exporting,
+          children: exporting ? "RENDERING…" : mode === "SONG" ? "EXPORT TRACK" : "EXPORT WAV"
+        }, void 0, false)]
+      }, void 0, true), mode === "SONG" && /*#__PURE__*/_jsxDEV("div", {
+        style: {
+          marginBottom: 14
+        },
+        children: [/*#__PURE__*/_jsxDEV("div", {
+          style: {
+            ...S.sub,
+            marginBottom: 6
+          },
+          children: ["ARRANGEMENT · TAP CELLS: A→B→C→D→OFF · ", songLen(song), " BARS"]
+        }, void 0, true), SECTIONS.map(secKey => /*#__PURE__*/_jsxDEV("div", {
+          style: {
+            display: "flex",
+            gap: 3,
+            alignItems: "center",
+            marginBottom: 3
+          },
+          children: [/*#__PURE__*/_jsxDEV("div", {
+            style: S.songLabel(SECTION_META[secKey].color),
+            children: SECTION_META[secKey].label
+          }, void 0, false), song[secKey].map((patKey, i) => /*#__PURE__*/_jsxDEV("button", {
+            style: {
+              ...S.songSlot(patKey, playing && mode === "SONG" && playingBar % songLen(song) === i),
+              marginLeft: i % 4 === 0 && i !== 0 ? 7 : 0
+            },
+            onClick: () => cycleSongSlot(secKey, i),
+            children: patKey || "·"
+          }, i, false))]
+        }, secKey, true))]
+      }, void 0, true), /*#__PURE__*/_jsxDEV("div", {
+        style: S.stepnums,
+        children: Array.from({
+          length: STEPS
+        }, (_, i) => /*#__PURE__*/_jsxDEV("div", {
+          style: S.stepnum(i, playing && playhead === i),
+          children: i % 4 === 0 ? i / 4 + 1 : "·"
+        }, i, false))
+      }, void 0, false), sectionHeader("drums"), open.drums && /*#__PURE__*/_jsxDEV(_Fragment, {
+        children: [/*#__PURE__*/_jsxDEV("div", {
+          style: S.sectionCtrls,
+          children: sectionPatternBar("drums")
+        }, void 0, false), TRACKS.map(t => /*#__PURE__*/_jsxDEV("div", {
+          style: S.row,
+          children: [/*#__PURE__*/_jsxDEV("div", {
+            style: S.label(t.color, muted[t.id]),
+            children: [/*#__PURE__*/_jsxDEV("button", {
+              style: S.muteBtn(muted[t.id]),
+              onClick: () => toggleMute(t.id),
+              children: "M"
+            }, void 0, false), /*#__PURE__*/_jsxDEV("span", {
+              children: t.name
+            }, void 0, false)]
+          }, void 0, true), /*#__PURE__*/_jsxDEV("div", {
+            style: S.grid,
+            children: patterns.drums[editSel.drums][t.id].map((on, i) => /*#__PURE__*/_jsxDEV("button", {
+              style: S.cell(on, showHeadFor("drums") && playhead === i, t.color, i % 4 === 0 && i !== 0, drumCellH),
+              onClick: () => toggleCell(t.id, i)
+            }, i, false))
+          }, void 0, false)]
+        }, t.id, true))]
+      }, void 0, true), sectionHeader("bass", BASS_VOICES[voices.bass]), open.bass && /*#__PURE__*/_jsxDEV(_Fragment, {
+        children: [/*#__PURE__*/_jsxDEV("div", {
+          style: S.sectionCtrls,
+          children: [sectionPatternBar("bass"), /*#__PURE__*/_jsxDEV("div", {
+            style: {
+              display: "flex",
+              gap: 4,
+              flexWrap: "wrap"
+            },
+            children: BASS_VOICES.map((v, vi) => /*#__PURE__*/_jsxDEV("button", {
+              style: S.voiceBtn(voices.bass === vi, SECTION_META.bass.color),
+              onClick: () => setVoices(vs => ({
+                ...vs,
+                bass: vi
+              })),
+              children: v
+            }, v, false))
+          }, void 0, false), /*#__PURE__*/_jsxDEV("div", {
+            style: S.knob,
+            children: [/*#__PURE__*/_jsxDEV("div", {
+              style: S.knobLabel,
+              children: [/*#__PURE__*/_jsxDEV("span", {
+                children: "CUTOFF"
+              }, void 0, false), /*#__PURE__*/_jsxDEV("span", {
+                children: [cutoff, " Hz"]
+              }, void 0, true)]
+            }, void 0, true), /*#__PURE__*/_jsxDEV("input", {
+              type: "range",
+              min: 300,
+              max: 4500,
+              value: cutoff,
+              onChange: e => setCutoff(+e.target.value),
+              style: {
+                width: "100%",
+                accentColor: SECTION_META.bass.color
+              }
+            }, void 0, false)]
+          }, void 0, true), /*#__PURE__*/_jsxDEV("div", {
+            style: S.knob,
+            children: [/*#__PURE__*/_jsxDEV("div", {
+              style: S.knobLabel,
+              children: [/*#__PURE__*/_jsxDEV("span", {
+                children: "RES"
+              }, void 0, false), /*#__PURE__*/_jsxDEV("span", {
+                children: res
+              }, void 0, false)]
+            }, void 0, true), /*#__PURE__*/_jsxDEV("input", {
+              type: "range",
+              min: 0,
+              max: 20,
+              value: res,
+              onChange: e => setRes(+e.target.value),
+              style: {
+                width: "100%",
+                accentColor: SECTION_META.bass.color
+              }
+            }, void 0, false)]
+          }, void 0, true)]
+        }, void 0, true), noteRows("bass", BASS_NOTES, 15)]
+      }, void 0, true), sectionHeader("lead", LEAD_VOICES[voices.lead]), open.lead && /*#__PURE__*/_jsxDEV(_Fragment, {
+        children: [/*#__PURE__*/_jsxDEV("div", {
+          style: S.sectionCtrls,
+          children: [sectionPatternBar("lead"), /*#__PURE__*/_jsxDEV("div", {
+            style: {
+              display: "flex",
+              gap: 4,
+              flexWrap: "wrap"
+            },
+            children: LEAD_VOICES.map((v, vi) => /*#__PURE__*/_jsxDEV("button", {
+              style: S.voiceBtn(voices.lead === vi, SECTION_META.lead.color),
+              onClick: () => setVoices(vs => ({
+                ...vs,
+                lead: vi
+              })),
+              children: v
+            }, v, false))
+          }, void 0, false), /*#__PURE__*/_jsxDEV("div", {
+            style: S.knob,
+            children: [/*#__PURE__*/_jsxDEV("div", {
+              style: S.knobLabel,
+              children: [/*#__PURE__*/_jsxDEV("span", {
+                children: "LEVEL"
+              }, void 0, false), /*#__PURE__*/_jsxDEV("span", {
+                children: [leadLevel, "%"]
+              }, void 0, true)]
+            }, void 0, true), /*#__PURE__*/_jsxDEV("input", {
+              type: "range",
+              min: 0,
+              max: 100,
+              value: leadLevel,
+              onChange: e => setLeadLevel(+e.target.value),
+              style: {
+                width: "100%",
+                accentColor: SECTION_META.lead.color
+              }
+            }, void 0, false)]
+          }, void 0, true)]
+        }, void 0, true), noteRows("lead", LEAD_NOTES, 15)]
+      }, void 0, true), sectionHeader("chord", CHORD_VOICES[voices.chord]), open.chord && /*#__PURE__*/_jsxDEV(_Fragment, {
+        children: [/*#__PURE__*/_jsxDEV("div", {
+          style: S.sectionCtrls,
+          children: [sectionPatternBar("chord"), /*#__PURE__*/_jsxDEV("div", {
+            style: {
+              display: "flex",
+              gap: 4,
+              flexWrap: "wrap"
+            },
+            children: CHORD_VOICES.map((v, vi) => /*#__PURE__*/_jsxDEV("button", {
+              style: S.voiceBtn(voices.chord === vi, SECTION_META.chord.color),
+              onClick: () => setVoices(vs => ({
+                ...vs,
+                chord: vi
+              })),
+              children: v
+            }, v, false))
+          }, void 0, false), /*#__PURE__*/_jsxDEV("div", {
+            style: S.knob,
+            children: [/*#__PURE__*/_jsxDEV("div", {
+              style: S.knobLabel,
+              children: [/*#__PURE__*/_jsxDEV("span", {
+                children: "LEVEL"
+              }, void 0, false), /*#__PURE__*/_jsxDEV("span", {
+                children: [chordLevel, "%"]
+              }, void 0, true)]
+            }, void 0, true), /*#__PURE__*/_jsxDEV("input", {
+              type: "range",
+              min: 0,
+              max: 100,
+              value: chordLevel,
+              onChange: e => setChordLevel(+e.target.value),
+              style: {
+                width: "100%",
+                accentColor: SECTION_META.chord.color
+              }
+            }, void 0, false)]
+          }, void 0, true)]
+        }, void 0, true), noteRows("chord", CHORDS, 17)]
+      }, void 0, true), /*#__PURE__*/_jsxDEV("button", {
+        style: S.sectionHead(FX_COLOR),
+        onClick: () => toggleOpen("fx"),
+        children: [/*#__PURE__*/_jsxDEV("span", {
+          children: open.fx ? "▾" : "▸"
+        }, void 0, false), " FX · MASTER RACK"]
+      }, void 0, true), open.fx && /*#__PURE__*/_jsxDEV("div", {
+        style: {
+          ...S.sectionCtrls,
+          rowGap: 12
+        },
+        children: [/*#__PURE__*/_jsxDEV("div", {
+          style: S.knob,
+          children: [/*#__PURE__*/_jsxDEV("div", {
+            style: S.knobLabel,
+            children: [/*#__PURE__*/_jsxDEV("span", {
+              children: "DRIVE"
+            }, void 0, false), /*#__PURE__*/_jsxDEV("span", {
+              children: [fx.drive, "%"]
+            }, void 0, true)]
+          }, void 0, true), /*#__PURE__*/_jsxDEV("input", {
+            type: "range",
+            min: 0,
+            max: 100,
+            value: fx.drive,
+            onChange: e => setFx(f => ({
+              ...f,
+              drive: +e.target.value
+            })),
+            style: {
+              width: "100%",
+              accentColor: FX_COLOR
+            }
+          }, void 0, false)]
+        }, void 0, true), /*#__PURE__*/_jsxDEV("div", {
+          style: S.knob,
+          children: [/*#__PURE__*/_jsxDEV("div", {
+            style: S.knobLabel,
+            children: [/*#__PURE__*/_jsxDEV("span", {
+              children: "DJ FILTER"
+            }, void 0, false), /*#__PURE__*/_jsxDEV("span", {
+              children: fx.filter === 0 ? "OFF" : fx.filter < 0 ? `LP ${-fx.filter}` : `HP ${fx.filter}`
+            }, void 0, false)]
+          }, void 0, true), /*#__PURE__*/_jsxDEV("input", {
+            type: "range",
+            min: -100,
+            max: 100,
+            value: fx.filter,
+            onChange: e => setFx(f => ({
+              ...f,
+              filter: +e.target.value
+            })),
+            style: {
+              width: "100%",
+              accentColor: FX_COLOR
+            }
+          }, void 0, false)]
+        }, void 0, true), /*#__PURE__*/_jsxDEV("div", {
+          style: S.knob,
+          children: [/*#__PURE__*/_jsxDEV("div", {
+            style: S.knobLabel,
+            children: [/*#__PURE__*/_jsxDEV("span", {
+              children: "PUMP"
+            }, void 0, false), /*#__PURE__*/_jsxDEV("span", {
+              children: [fx.pump, "%"]
+            }, void 0, true)]
+          }, void 0, true), /*#__PURE__*/_jsxDEV("input", {
+            type: "range",
+            min: 0,
+            max: 100,
+            value: fx.pump,
+            onChange: e => setFx(f => ({
+              ...f,
+              pump: +e.target.value
+            })),
+            style: {
+              width: "100%",
+              accentColor: FX_COLOR
+            }
+          }, void 0, false)]
+        }, void 0, true), /*#__PURE__*/_jsxDEV("div", {
+          style: S.knob,
+          children: [/*#__PURE__*/_jsxDEV("div", {
+            style: S.knobLabel,
+            children: [/*#__PURE__*/_jsxDEV("span", {
+              children: "DELAY MIX"
+            }, void 0, false), /*#__PURE__*/_jsxDEV("span", {
+              children: [fx.delayMix, "%"]
+            }, void 0, true)]
+          }, void 0, true), /*#__PURE__*/_jsxDEV("input", {
+            type: "range",
+            min: 0,
+            max: 100,
+            value: fx.delayMix,
+            onChange: e => setFx(f => ({
+              ...f,
+              delayMix: +e.target.value
+            })),
+            style: {
+              width: "100%",
+              accentColor: FX_COLOR
+            }
+          }, void 0, false)]
+        }, void 0, true), /*#__PURE__*/_jsxDEV("div", {
+          style: S.knob,
+          children: [/*#__PURE__*/_jsxDEV("div", {
+            style: S.knobLabel,
+            children: [/*#__PURE__*/_jsxDEV("span", {
+              children: "FEEDBACK"
+            }, void 0, false), /*#__PURE__*/_jsxDEV("span", {
+              children: [fx.delayFb, "%"]
+            }, void 0, true)]
+          }, void 0, true), /*#__PURE__*/_jsxDEV("input", {
+            type: "range",
+            min: 0,
+            max: 95,
+            value: fx.delayFb,
+            onChange: e => setFx(f => ({
+              ...f,
+              delayFb: +e.target.value
+            })),
+            style: {
+              width: "100%",
+              accentColor: FX_COLOR
+            }
+          }, void 0, false)]
+        }, void 0, true), /*#__PURE__*/_jsxDEV("div", {
+          style: {
+            display: "flex",
+            gap: 4,
+            alignItems: "center"
+          },
+          children: [/*#__PURE__*/_jsxDEV("span", {
+            style: {
+              ...S.knobLabel,
+              marginRight: 2
+            },
+            children: "TIME"
+          }, void 0, false), DELAY_TIMES.map(dt => /*#__PURE__*/_jsxDEV("button", {
+            style: S.voiceBtn(fx.delayTime === dt, FX_COLOR),
+            onClick: () => setFx(f => ({
+              ...f,
+              delayTime: dt
+            })),
+            children: dt
+          }, dt, false))]
+        }, void 0, true), /*#__PURE__*/_jsxDEV("div", {
+          style: S.knob,
+          children: [/*#__PURE__*/_jsxDEV("div", {
+            style: S.knobLabel,
+            children: [/*#__PURE__*/_jsxDEV("span", {
+              children: "REVERB"
+            }, void 0, false), /*#__PURE__*/_jsxDEV("span", {
+              children: [fx.verbMix, "%"]
+            }, void 0, true)]
+          }, void 0, true), /*#__PURE__*/_jsxDEV("input", {
+            type: "range",
+            min: 0,
+            max: 100,
+            value: fx.verbMix,
+            onChange: e => setFx(f => ({
+              ...f,
+              verbMix: +e.target.value
+            })),
+            style: {
+              width: "100%",
+              accentColor: FX_COLOR
+            }
+          }, void 0, false)]
+        }, void 0, true)]
+      }, void 0, true), /*#__PURE__*/_jsxDEV("div", {
+        style: S.presets,
+        children: [/*#__PURE__*/_jsxDEV("span", {
+          style: {
+            ...S.sub,
+            marginRight: 2
+          },
+          children: "PRESETS → SELECTED PTNS"
+        }, void 0, false), Object.keys(PRESETS).map(name => /*#__PURE__*/_jsxDEV("button", {
+          style: {
+            ...S.smallBtn,
+            padding: "7px 9px",
+            fontSize: 9
+          },
+          onClick: () => loadPreset(name),
+          children: name
+        }, name, false))]
+      }, void 0, true)]
+    }, void 0, true)
+  }, void 0, false);
+}
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(React.createElement(TrackMaker));
+
+</script>
+</body>
+</html>
