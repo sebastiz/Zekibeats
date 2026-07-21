@@ -14,7 +14,17 @@
 <body>
 <div id="root"></div>
 <script>
-import { jsxDEV as _jsxDEV, Fragment as _Fragment } from "react/jsx-dev-runtime";
+// JSX automatic-runtime shim: derive the dev-runtime helpers from the global
+// React (loaded via UMD) instead of importing an unresolvable bare module.
+const _Fragment = React.Fragment;
+function _jsxDEV(type, props, key) {
+  props = props || {};
+  const { children, ...rest } = props;
+  if (key !== undefined && key !== null) rest.key = key;
+  if (children === undefined) return React.createElement(type, rest);
+  if (Array.isArray(children)) return React.createElement(type, rest, ...children);
+  return React.createElement(type, rest, children);
+}
 const {
   useState,
   useRef,
