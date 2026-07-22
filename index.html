@@ -458,6 +458,102 @@ const PRESETS = {
   }
 };
 
+// song-mode arrangement presets. Each row is 16 bars; a letter picks the
+// clip (A-D) that plays that bar for the section, "." = silent that bar.
+const toBars = s => s.replace(/\s+/g, "").split("").map(c => c === "." ? null : c);
+const SONG_ARRANGEMENTS = {
+  "CLASSIC": {
+    drums: toBars("AAAA AAAA BBBB AABB"),
+    bass: toBars(".... AAAA BBBB BBBB"),
+    lead: toBars(".... ..AA .... AAAA"),
+    chord: toBars("AAAA AAAA .... AAAA")
+  },
+  "INTRO → DROP": {
+    drums: toBars("AAAA AAAA AAAA AAAA"),
+    bass: toBars(".... AAAA AAAA AAAA"),
+    lead: toBars(".... .... .... AAAA"),
+    chord: toBars(".... .... AAAA AAAA")
+  },
+  "PEAK TIME": {
+    drums: toBars("BBBB BBBB BBBB BBBB"),
+    bass: toBars("BBBB BBBB BBBB BBBB"),
+    lead: toBars(".... .... CCCC CCCC"),
+    chord: toBars(".... .... .... ....")
+  },
+  "BREAKDOWN": {
+    drums: toBars("AAAA CCCC .... AAAA"),
+    bass: toBars("AAAA .... .... AAAA"),
+    lead: toBars(".... DDDD DDDD AAAA"),
+    chord: toBars("AAAA DDDD DDDD AAAA")
+  },
+  "SLOW BUILD": {
+    drums: toBars("AAAA AAAA BBBB BBBB"),
+    bass: toBars("..AA AAAA BBBB BBBB"),
+    lead: toBars(".... .... ..BB BBBB"),
+    chord: toBars("AAAA AAAA BBBB BBBB")
+  },
+  "STRIPPED": {
+    drums: toBars("DDDD DDDD DDDD DDDD"),
+    bass: toBars(".... DD.. .... DD.."),
+    lead: toBars(".... .... .... ...."),
+    chord: toBars(".... .... .... ....")
+  },
+  "FULL POWER": {
+    drums: toBars("AABB AABB AABB AABB"),
+    bass: toBars("AABB AABB AABB AABB"),
+    lead: toBars("AABB AABB AABB AABB"),
+    chord: toBars("AABB AABB AABB AABB")
+  },
+  "EUPHORIC": {
+    drums: toBars("AAAA AAAA AAAA AAAA"),
+    bass: toBars("AAAA AAAA AAAA AAAA"),
+    lead: toBars(".... .... BBBB BBBB"),
+    chord: toBars("BBBB BBBB BBBB BBBB")
+  },
+  "TENSION": {
+    drums: toBars("AAAA AAAA .... BBBB"),
+    bass: toBars("AAAA AAAA .... BBBB"),
+    lead: toBars(".... .... BBBB BBBB"),
+    chord: toBars("AAAA AAAA BBBB ....")
+  },
+  "DUB": {
+    drums: toBars("AA.A AA.A AA.A AA.A"),
+    bass: toBars("A.A. A.A. A.A. A.A."),
+    lead: toBars(".... ..C. .... ..C."),
+    chord: toBars(".A.. ...A .A.. ...A")
+  },
+  "PERCUSSIVE": {
+    drums: toBars("AAAA BBBB AAAA BBBB"),
+    bass: toBars(".... BBBB .... BBBB"),
+    lead: toBars(".... .... .... ...."),
+    chord: toBars("..AA ..AA ..AA ..AA")
+  },
+  "AB JOURNEY": {
+    drums: toBars("AAAA BBBB CCCC DDDD"),
+    bass: toBars("AAAA BBBB CCCC DDDD"),
+    lead: toBars(".... .... CCCC DDDD"),
+    chord: toBars("AAAA BBBB CCCC DDDD")
+  },
+  "LONG DROP": {
+    drums: toBars("AABB BBBB BBBB BBBB"),
+    bass: toBars("..BB BBBB BBBB BBBB"),
+    lead: toBars(".... AAAA AAAA AAAA"),
+    chord: toBars(".... AAAA AAAA AAAA")
+  },
+  "CALL & RESPONSE": {
+    drums: toBars("AAAA AAAA AAAA AAAA"),
+    bass: toBars("AAAA AAAA AAAA AAAA"),
+    lead: toBars("AA.. AA.. AA.. AA.."),
+    chord: toBars("..AA ..AA ..AA ..AA")
+  },
+  "MINIMAL 8": {
+    drums: toBars("DDDD DDDD .... ...."),
+    bass: toBars("..DD DDDD .... ...."),
+    lead: toBars(".... .... .... ...."),
+    chord: toBars(".... DDDD .... ....")
+  }
+};
+
 // ---------- audio engine ----------
 function makeNoise(ctx) {
   const buf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
@@ -1269,6 +1365,15 @@ function TrackMaker() {
       [editSel.chord]: [...PRESETS[name].chord]
     }
   }));
+  const loadArrangement = name => {
+    const a = SONG_ARRANGEMENTS[name];
+    setSong({
+      drums: [...a.drums],
+      bass: [...a.bass],
+      lead: [...a.lead],
+      chord: [...a.chord]
+    });
+  };
   const toggleMute = id => setMuted(m => ({
     ...m,
     [id]: !m[id]
@@ -1773,6 +1878,27 @@ function TrackMaker() {
             marginBottom: 6
           },
           children: ["ARRANGEMENT · TAP CELLS: A→B→C→D→OFF · ", songLen(song), " BARS"]
+        }, void 0, true), /*#__PURE__*/_jsxDEV("div", {
+          style: {
+            ...S.presets,
+            marginTop: 0,
+            marginBottom: 10
+          },
+          children: [/*#__PURE__*/_jsxDEV("span", {
+            style: {
+              ...S.sub,
+              marginRight: 2
+            },
+            children: "LOAD ARRANGEMENT →"
+          }, void 0, false), Object.keys(SONG_ARRANGEMENTS).map(name => /*#__PURE__*/_jsxDEV("button", {
+            style: {
+              ...S.smallBtn,
+              padding: "6px 8px",
+              fontSize: 9
+            },
+            onClick: () => loadArrangement(name),
+            children: name
+          }, name, false))]
         }, void 0, true), SECTIONS.map(secKey => /*#__PURE__*/_jsxDEV("div", {
           style: {
             display: "flex",
