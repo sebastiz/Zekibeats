@@ -554,6 +554,10 @@ const SONG_ARRANGEMENTS = {
   }
 };
 
+// song-structure labels for the four 4-bar blocks of the arrangement.
+// Tap a label to cycle through this vocabulary.
+const SONG_SECTION_NAMES = ["INTRO", "BUILD", "DROP", "BREAK", "VERSE", "CHORUS", "FILL", "BUILD 2", "DROP 2", "BRIDGE", "OUTRO"];
+
 // ---------- audio engine ----------
 function makeNoise(ctx) {
   const buf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
@@ -1051,6 +1055,7 @@ function TrackMaker() {
     lead: [null, null, null, null, null, null, "A", "A", null, null, null, null, "A", "A", "A", "A"],
     chord: ["A", "A", "A", "A", "A", "A", "A", "A", null, null, null, null, "A", "A", "A", "A"]
   });
+  const [songLabels, setSongLabels] = useState(["INTRO", "BUILD", "DROP", "BREAK"]);
   const [playing, setPlaying] = useState(false);
   const [bpm, setBpm] = useState(126);
   const [swing, setSwing] = useState(0);
@@ -1320,6 +1325,11 @@ function TrackMaker() {
       }
     };
   });
+  const cycleSongLabel = b => setSongLabels(ls => {
+    const n = [...ls];
+    n[b] = SONG_SECTION_NAMES[(SONG_SECTION_NAMES.indexOf(n[b]) + 1) % SONG_SECTION_NAMES.length];
+    return n;
+  });
   const cycleSongSlot = (secKey, i) => setSong(s => {
     const row = [...s[secKey]];
     const order = [...PAT_KEYS, null];
@@ -1586,6 +1596,29 @@ function TrackMaker() {
       marginLeft: 60,
       marginBottom: 6
     },
+    songSecRow: {
+      display: "flex",
+      gap: 3,
+      marginLeft: 60,
+      marginBottom: 5
+    },
+    songSecCell: i => ({
+      flex: 1,
+      minWidth: 0,
+      overflow: "visible",
+      marginLeft: i % 4 === 0 && i !== 0 ? 7 : 0
+    }),
+    songSecBtn: active => ({
+      background: "transparent",
+      border: "none",
+      padding: 0,
+      fontFamily: "inherit",
+      fontSize: 8,
+      letterSpacing: "0.12em",
+      whiteSpace: "nowrap",
+      cursor: "pointer",
+      color: active ? "#ffb03a" : "#8a8a95"
+    }),
     stepnum: (i, isHead) => ({
       flex: 1,
       textAlign: "center",
@@ -1899,7 +1932,19 @@ function TrackMaker() {
             onClick: () => loadArrangement(name),
             children: name
           }, name, false))]
-        }, void 0, true), SECTIONS.map(secKey => /*#__PURE__*/_jsxDEV("div", {
+        }, void 0, true), /*#__PURE__*/_jsxDEV("div", {
+          style: S.songSecRow,
+          children: Array.from({
+            length: STEPS
+          }, (_, i) => /*#__PURE__*/_jsxDEV("div", {
+            style: S.songSecCell(i),
+            children: i % 4 === 0 ? /*#__PURE__*/_jsxDEV("button", {
+              style: S.songSecBtn(playing && mode === "SONG" && Math.floor(playingBar % songLen(song) / 4) === i / 4),
+              onClick: () => cycleSongLabel(i / 4),
+              children: songLabels[i / 4]
+            }, void 0, false) : null
+          }, i, false))
+        }, void 0, false), SECTIONS.map(secKey => /*#__PURE__*/_jsxDEV("div", {
           style: {
             display: "flex",
             gap: 3,
