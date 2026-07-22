@@ -167,8 +167,8 @@ const CHORDS = [{
   f: [196.0, 246.94, 293.66]
 }];
 const BASS_VOICES = ["303 SAW", "303 SQR", "SUB", "FM"];
-const LEAD_VOICES = ["PLUCK", "SAW", "BELL", "CHIP"];
-const CHORD_VOICES = ["STAB", "PAD", "ORGAN"];
+const LEAD_VOICES = ["PLUCK", "SAW", "BELL", "CHIP", "SUPER", "PWM", "SINE", "ACID", "HARD"];
+const CHORD_VOICES = ["STAB", "PAD", "ORGAN", "STRINGS", "PIANO", "BRASS", "BELL", "PLUCK"];
 const DELAY_TIMES = ["1/8", "3/16", "1/4"];
 const emptyDrums = () => Object.fromEntries(TRACKS.map(t => [t.id, Array(STEPS).fill(false)]));
 const nulls = () => Array(STEPS).fill(null);
@@ -886,6 +886,106 @@ function synthLead(ctx, noise, dest, t, freq, level, voice) {
     osc.stop(t + 0.15);
     return;
   }
+  if (voice === 4) {
+    // SUPER — supersaw: three detuned saws, bright filtered sustain
+    const f = ctx.createBiquadFilter();
+    f.type = "lowpass";
+    f.Q.value = 1;
+    f.frequency.setValueAtTime(5200, t);
+    f.frequency.exponentialRampToValueAtTime(1600, t + 0.4);
+    const g = env(ctx, t, 0.16 * level, 0.42, 0.008);
+    [-14, 0, 14].forEach(cents => {
+      const o = ctx.createOscillator();
+      o.type = "sawtooth";
+      o.frequency.value = freq;
+      o.detune.value = cents;
+      o.connect(f);
+      o.start(t);
+      o.stop(t + 0.46);
+    });
+    f.connect(g).connect(dest);
+    return;
+  }
+  if (voice === 5) {
+    // PWM — hollow detuned squares through a resonant lowpass
+    const f = ctx.createBiquadFilter();
+    f.type = "lowpass";
+    f.frequency.value = 2400;
+    f.Q.value = 4;
+    const g = env(ctx, t, 0.2 * level, 0.3, 0.005);
+    [-8, 8].forEach(cents => {
+      const o = ctx.createOscillator();
+      o.type = "square";
+      o.frequency.value = freq;
+      o.detune.value = cents;
+      const og = ctx.createGain();
+      og.gain.value = 0.5;
+      o.connect(og).connect(f);
+      o.start(t);
+      o.stop(t + 0.34);
+    });
+    f.connect(g).connect(dest);
+    return;
+  }
+  if (voice === 6) {
+    // SINE — soft pure tone with a gentle octave shimmer
+    const o = ctx.createOscillator();
+    o.type = "sine";
+    o.frequency.value = freq;
+    const o2 = ctx.createOscillator();
+    o2.type = "sine";
+    o2.frequency.value = freq * 2;
+    const g2 = ctx.createGain();
+    g2.gain.value = 0.12;
+    const g = env(ctx, t, 0.3 * level, 0.4, 0.01);
+    o.connect(g);
+    o2.connect(g2).connect(g);
+    g.connect(dest);
+    o.start(t);
+    o.stop(t + 0.44);
+    o2.start(t);
+    o2.stop(t + 0.44);
+    return;
+  }
+  if (voice === 7) {
+    // ACID — 303-style saw through a resonant, sweeping lowpass
+    const o = ctx.createOscillator();
+    o.type = "sawtooth";
+    o.frequency.value = freq;
+    const f = ctx.createBiquadFilter();
+    f.type = "lowpass";
+    f.Q.value = 12;
+    f.frequency.setValueAtTime(3200, t);
+    f.frequency.exponentialRampToValueAtTime(500, t + 0.25);
+    o.connect(f).connect(env(ctx, t, 0.24 * level, 0.3)).connect(dest);
+    o.start(t);
+    o.stop(t + 0.34);
+    return;
+  }
+  if (voice === 8) {
+    // HARD — aggressive saw+square through a highpass, buzzy stab
+    const o = ctx.createOscillator();
+    o.type = "sawtooth";
+    o.frequency.value = freq;
+    const o2 = ctx.createOscillator();
+    o2.type = "square";
+    o2.frequency.value = freq;
+    o2.detune.value = 12;
+    const hp = ctx.createBiquadFilter();
+    hp.type = "highpass";
+    hp.frequency.value = 400;
+    const og2 = ctx.createGain();
+    og2.gain.value = 0.5;
+    const g = env(ctx, t, 0.18 * level, 0.2, 0.003);
+    o.connect(hp);
+    o2.connect(og2).connect(hp);
+    hp.connect(g).connect(dest);
+    o.start(t);
+    o.stop(t + 0.24);
+    o2.start(t);
+    o2.stop(t + 0.24);
+    return;
+  }
   const osc = ctx.createOscillator();
   osc.type = "square";
   osc.frequency.value = freq;
@@ -935,6 +1035,133 @@ function synthChord(ctx, noise, dest, t, freqs, level, voice) {
       });
     });
     g.connect(dest);
+    return;
+  }
+  if (voice === 3) {
+    // STRINGS — lush detuned-saw ensemble with slow swell
+    const f = ctx.createBiquadFilter();
+    f.type = "lowpass";
+    f.frequency.value = 2200;
+    f.Q.value = 0.7;
+    const g = env(ctx, t, 0.26 * level, 1.6, 0.35);
+    freqs.forEach(fr => {
+      [-10, -3, 4, 11].forEach(cents => {
+        const osc = ctx.createOscillator();
+        osc.type = "sawtooth";
+        osc.frequency.value = fr;
+        osc.detune.value = cents;
+        const og = ctx.createGain();
+        og.gain.value = 0.09;
+        osc.connect(og).connect(f);
+        osc.start(t);
+        osc.stop(t + 1.7);
+      });
+    });
+    f.connect(g).connect(dest);
+    return;
+  }
+  if (voice === 4) {
+    // PIANO — FM electric-piano tine per note, medium decay
+    const g = env(ctx, t, 0.42 * level, 0.7);
+    freqs.forEach(fr => {
+      const car = ctx.createOscillator();
+      car.type = "sine";
+      car.frequency.value = fr;
+      const mod = ctx.createOscillator();
+      mod.type = "sine";
+      mod.frequency.value = fr * 2;
+      const mg = ctx.createGain();
+      mg.gain.setValueAtTime(fr * 1.2, t);
+      mg.gain.exponentialRampToValueAtTime(1, t + 0.2);
+      mod.connect(mg).connect(car.frequency);
+      const og = ctx.createGain();
+      og.gain.value = 0.12;
+      car.connect(og).connect(g);
+      car.start(t);
+      car.stop(t + 0.75);
+      mod.start(t);
+      mod.stop(t + 0.75);
+    });
+    g.connect(dest);
+    return;
+  }
+  if (voice === 5) {
+    // BRASS — saw stack with a punchy filter envelope
+    const f = ctx.createBiquadFilter();
+    f.type = "lowpass";
+    f.Q.value = 2;
+    f.frequency.setValueAtTime(800, t);
+    f.frequency.linearRampToValueAtTime(3200, t + 0.08);
+    f.frequency.exponentialRampToValueAtTime(1200, t + 0.5);
+    const g = env(ctx, t, 0.34 * level, 0.55, 0.04);
+    freqs.forEach(fr => {
+      [-5, 5].forEach(cents => {
+        const osc = ctx.createOscillator();
+        osc.type = "sawtooth";
+        osc.frequency.value = fr;
+        osc.detune.value = cents;
+        const og = ctx.createGain();
+        og.gain.value = 0.13;
+        osc.connect(og).connect(f);
+        osc.start(t);
+        osc.stop(t + 0.6);
+      });
+    });
+    f.connect(g).connect(dest);
+    return;
+  }
+  if (voice === 6) {
+    // BELL — bright inharmonic FM bell stack
+    const g = env(ctx, t, 0.3 * level, 0.9);
+    freqs.forEach(fr => {
+      const car = ctx.createOscillator();
+      car.type = "sine";
+      car.frequency.value = fr;
+      const mod = ctx.createOscillator();
+      mod.type = "sine";
+      mod.frequency.value = fr * 3.51;
+      const mg = ctx.createGain();
+      mg.gain.setValueAtTime(fr * 1.6, t);
+      mg.gain.exponentialRampToValueAtTime(1, t + 0.3);
+      mod.connect(mg).connect(car.frequency);
+      const og = ctx.createGain();
+      og.gain.value = 0.1;
+      car.connect(og).connect(g);
+      car.start(t);
+      car.stop(t + 0.95);
+      mod.start(t);
+      mod.stop(t + 0.95);
+    });
+    g.connect(dest);
+    return;
+  }
+  if (voice === 7) {
+    // PLUCK — short harp-like triangle+saw with fast filter decay
+    const f = ctx.createBiquadFilter();
+    f.type = "lowpass";
+    f.Q.value = 1;
+    f.frequency.setValueAtTime(4000, t);
+    f.frequency.exponentialRampToValueAtTime(900, t + 0.2);
+    const g = env(ctx, t, 0.4 * level, 0.3);
+    freqs.forEach(fr => {
+      const osc = ctx.createOscillator();
+      osc.type = "triangle";
+      osc.frequency.value = fr;
+      const os2 = ctx.createOscillator();
+      os2.type = "sawtooth";
+      os2.frequency.value = fr;
+      const og = ctx.createGain();
+      og.gain.value = 0.1;
+      const og2 = ctx.createGain();
+      og2.gain.value = 0.06;
+      osc.connect(og).connect(f);
+      os2.connect(og2).connect(f);
+      osc.start(t);
+      osc.stop(t + 0.34);
+      os2.start(t);
+      os2.stop(t + 0.34);
+    });
+    f.connect(g).connect(dest);
     return;
   }
   const f = ctx.createBiquadFilter();
