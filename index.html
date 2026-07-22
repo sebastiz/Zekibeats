@@ -557,9 +557,9 @@ const SONG_ARRANGEMENTS = {
   }
 };
 
-// song-structure labels for the four 4-bar blocks of the arrangement.
-// Tap a label to cycle through this vocabulary.
-const SONG_SECTION_NAMES = ["INTRO", "BUILD", "DROP", "BREAK", "VERSE", "CHORUS", "FILL", "BUILD 2", "DROP 2", "BRIDGE", "OUTRO"];
+// The arrangement grows/shrinks in 4-bar sections, each with a name label.
+const BARS_PER_SECTION = 4;
+const MAX_SECTIONS = 12;
 
 // ---------- audio engine ----------
 function makeNoise(ctx) {
@@ -1555,11 +1555,46 @@ function TrackMaker() {
       }
     };
   });
-  const cycleSongLabel = b => setSongLabels(ls => {
-    const n = [...ls];
-    n[b] = SONG_SECTION_NAMES[(SONG_SECTION_NAMES.indexOf(n[b]) + 1) % SONG_SECTION_NAMES.length];
-    return n;
-  });
+  const fitLabels = (ls, n) => Array.from({
+    length: n
+  }, (_, i) => ls[i] || "SECTION " + (i + 1));
+  const editSongLabel = b => {
+    const cur = songLabels[b] || "";
+    const name = window.prompt("Section name", cur);
+    if (name === null) return;
+    const clean = name.trim().toUpperCase();
+    setSongLabels(ls => {
+      const n = [...ls];
+      n[b] = clean || cur || "SECTION " + (b + 1);
+      return n;
+    });
+  };
+  const addSection = () => {
+    setSong(s => {
+      if (s.drums.length >= MAX_SECTIONS * BARS_PER_SECTION) return s;
+      const grow = row => [...row, ...Array(BARS_PER_SECTION).fill(null)];
+      return {
+        drums: grow(s.drums),
+        bass: grow(s.bass),
+        lead: grow(s.lead),
+        chord: grow(s.chord)
+      };
+    });
+    setSongLabels(ls => ls.length >= MAX_SECTIONS ? ls : [...ls, "SECTION " + (ls.length + 1)]);
+  };
+  const removeSection = () => {
+    setSong(s => {
+      if (s.drums.length <= BARS_PER_SECTION) return s;
+      const cut = row => row.slice(0, -BARS_PER_SECTION);
+      return {
+        drums: cut(s.drums),
+        bass: cut(s.bass),
+        lead: cut(s.lead),
+        chord: cut(s.chord)
+      };
+    });
+    setSongLabels(ls => ls.length <= 1 ? ls : ls.slice(0, -1));
+  };
   const cycleSongSlot = (secKey, i) => setSong(s => {
     const row = [...s[secKey]];
     const order = [...PAT_KEYS, null];
@@ -1613,6 +1648,7 @@ function TrackMaker() {
       lead: [...a.lead],
       chord: [...a.chord]
     });
+    setSongLabels(ls => fitLabels(ls, a.drums.length / BARS_PER_SECTION));
   };
   const toggleMute = id => setMuted(m => ({
     ...m,
@@ -2138,9 +2174,31 @@ function TrackMaker() {
         children: [/*#__PURE__*/_jsxDEV("div", {
           style: {
             ...S.sub,
-            marginBottom: 6
+            marginBottom: 6,
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            flexWrap: "wrap"
           },
-          children: ["ARRANGEMENT · TAP CELLS: A→B→C→D→OFF · ", songLen(song), " BARS"]
+          children: [/*#__PURE__*/_jsxDEV("span", {
+            children: ["ARRANGEMENT · TAP LABELS TO RENAME · TAP CELLS: A→B→C→D→OFF · ", song.drums.length, " BARS"]
+          }, void 0, true), /*#__PURE__*/_jsxDEV("button", {
+            style: {
+              ...S.smallBtn,
+              padding: "5px 8px",
+              fontSize: 9
+            },
+            onClick: addSection,
+            children: "+ SECTION"
+          }, void 0, false), /*#__PURE__*/_jsxDEV("button", {
+            style: {
+              ...S.smallBtn,
+              padding: "5px 8px",
+              fontSize: 9
+            },
+            onClick: removeSection,
+            children: "− SECTION"
+          }, void 0, false)]
         }, void 0, true), /*#__PURE__*/_jsxDEV("div", {
           style: {
             ...S.presets,
@@ -2165,13 +2223,13 @@ function TrackMaker() {
         }, void 0, true), /*#__PURE__*/_jsxDEV("div", {
           style: S.songSecRow,
           children: Array.from({
-            length: STEPS
+            length: song.drums.length
           }, (_, i) => /*#__PURE__*/_jsxDEV("div", {
             style: S.songSecCell(i),
             children: i % 4 === 0 ? /*#__PURE__*/_jsxDEV("button", {
               style: S.songSecBtn(playing && mode === "SONG" && Math.floor(playingBar % songLen(song) / 4) === i / 4),
-              onClick: () => cycleSongLabel(i / 4),
-              children: songLabels[i / 4]
+              onClick: () => editSongLabel(i / 4),
+              children: songLabels[i / 4] || "SECTION " + (i / 4 + 1)
             }, void 0, false) : null
           }, i, false))
         }, void 0, false), SECTIONS.map(secKey => /*#__PURE__*/_jsxDEV("div", {
