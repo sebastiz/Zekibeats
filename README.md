@@ -10,8 +10,10 @@ A dance track maker that runs entirely in the browser. Everything is synthesized
 - **Bass synth** — 303-style monophonic piano roll (A minor, one octave) with four voices (saw, square, sub, FM) and live cutoff/resonance for acid sweeps.
 - **Lead synth** — one octave up, four voices (pluck, saw, bell, chip).
 - **Chord machine** — one-tap Am/F/C/G stabs with stab, pad, and organ voices.
-- **Clip matrix** — each section (drums, bass, lead, chords) has four independent patterns (A–D), Ableton Session View style.
-- **Song mode** — a 16-bar × 4-section arrangement grid. Tap cells to cycle A→B→C→D→off; empty cells silence that section for the bar, which is how intros, breakdowns, and drops are built.
+- **Vocal synth** — a pitched A-minor octave sung through a formant filter bank, with 16 selectable vocal "samples" (AAH, OOH, EEE, CHOIR, VOX PAD, YEAH, WHOA, AIR VOX, and more). All formant-synthesized live — no audio files.
+- **Frills track** — a pad-triggered one-shot FX lane with an extensive choice of 20 synthesized frills: whooshes, risers, downlifters, impacts, sub drops, blips, zaps, lasers, reverse cymbals, vinyl/tape stops, sparkles, sirens, air horns and more. One frill per step.
+- **Clip matrix** — each section (drums, bass, lead, chords, vocal, frills) has four independent patterns (A–D), Ableton Session View style.
+- **Song mode** — a 16-bar × 6-section arrangement grid. Tap cells to cycle A→B→C→D→off; empty cells silence that section for the bar, which is how intros, breakdowns, and drops are built.
 - **FX rack** — drive (waveshaper), bipolar DJ filter (LP/HP sweep), tempo-synced feedback delay, convolution reverb, sidechain-style pump, and a glue compressor on the master. Per-section delay/reverb sends.
 - **Timing** — lookahead scheduler on the audio clock (rock-solid on mobile), tempo 90–160 BPM, adjustable swing.
 - **WAV export** — renders the current pattern or the whole song arrangement offline at 44.1 kHz and downloads a 16-bit stereo WAV.
