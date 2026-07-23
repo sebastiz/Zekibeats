@@ -7,7 +7,7 @@
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
 <title>Dance Track Maker — Step Seq · 16</title>
-<meta name="description" content="A browser-based dance track maker: 10-track drum machine, acid bass, lead and chord synths, FX rack, clip-matrix song arrangement, and WAV export. All synthesized with the Web Audio API." />
+<meta name="description" content="A browser-based dance track maker: 10-track drum machine, acid bass, lead and chord synths, a formant vocal synth with 16 voices, a pad-triggered frills FX lane, FX rack, clip-matrix song arrangement, and WAV export. All synthesized with the Web Audio API." />
 <style>
   html, body { margin: 0; padding: 0; background: #101013; }
 </style>
@@ -37,7 +37,7 @@ const {
 
 // ---------- constants ----------
 const STEPS = 16;
-const SECTIONS = ["drums", "bass", "lead", "chord"];
+const SECTIONS = ["drums", "bass", "lead", "chord", "vocal", "frill"];
 const PAT_KEYS = ["A", "B", "C", "D"];
 const SONG_SLOTS = 16;
 const PAT_COLORS = {
@@ -103,6 +103,14 @@ const SECTION_META = {
   chord: {
     label: "CHORDS",
     color: "#ff7db8"
+  },
+  vocal: {
+    label: "VOCAL",
+    color: "#78c6ff"
+  },
+  frill: {
+    label: "FRILLS",
+    color: "#ffa94d"
   }
 };
 const FX_COLOR = "#ffd23a";
@@ -172,6 +180,236 @@ const CHORDS = [{
 const BASS_VOICES = ["303 SAW", "303 SQR", "SUB", "FM"];
 const LEAD_VOICES = ["PLUCK", "SAW", "BELL", "CHIP", "SUPER", "PWM", "SINE", "ACID", "HARD"];
 const CHORD_VOICES = ["STAB", "PAD", "ORGAN", "STRINGS", "PIANO", "BRASS", "BELL", "PLUCK"];
+
+// Vocal section — a pitched A-minor octave (same range as the lead) sung
+// through a formant filter bank. Each "sample" is a synthesized vocal timbre.
+const VOCAL_NOTES = [{
+  n: "A3",
+  f: 220.0
+}, {
+  n: "B3",
+  f: 246.94
+}, {
+  n: "C4",
+  f: 261.63
+}, {
+  n: "D4",
+  f: 293.66
+}, {
+  n: "E4",
+  f: 329.63
+}, {
+  n: "F4",
+  f: 349.23
+}, {
+  n: "G4",
+  f: 392.0
+}, {
+  n: "A4",
+  f: 440.0
+}];
+// Each vocal voice is a formant recipe: three band-pass formant peaks (F1-F3)
+// with per-formant Q, an amplitude envelope, optional vibrato depth, a pitch
+// glide (semitones, for diphthong-style scoops), breath-noise amount, and a
+// chorus detune (cents) that stacks a second voice for a choir feel.
+const VOCAL_VOICES = [{
+  n: "AAH",
+  formants: [800, 1150, 2800],
+  q: [9, 10, 11],
+  attack: 0.03,
+  decay: 0.9,
+  vib: 0.006,
+  breath: 0.04
+}, {
+  n: "OOH",
+  formants: [325, 700, 2530],
+  q: [10, 11, 12],
+  attack: 0.04,
+  decay: 0.95,
+  vib: 0.006,
+  breath: 0.03
+}, {
+  n: "OHH",
+  formants: [500, 1000, 2450],
+  q: [9, 10, 11],
+  attack: 0.04,
+  decay: 0.9,
+  vib: 0.007,
+  breath: 0.03
+}, {
+  n: "EEE",
+  formants: [350, 2100, 2900],
+  q: [11, 12, 12],
+  attack: 0.03,
+  decay: 0.8,
+  vib: 0.006,
+  breath: 0.03
+}, {
+  n: "EHH",
+  formants: [530, 1850, 2500],
+  q: [10, 11, 11],
+  attack: 0.03,
+  decay: 0.8,
+  vib: 0.006,
+  breath: 0.03
+}, {
+  n: "MMM",
+  formants: [280, 900, 2200],
+  q: [14, 12, 12],
+  attack: 0.05,
+  decay: 1.0,
+  vib: 0.005,
+  breath: 0.0
+}, {
+  n: "CHOIR",
+  formants: [660, 1120, 2750],
+  q: [8, 9, 10],
+  attack: 0.12,
+  decay: 1.7,
+  vib: 0.008,
+  breath: 0.03,
+  detune: 12
+}, {
+  n: "VOX PAD",
+  formants: [500, 1500, 2600],
+  q: [7, 8, 9],
+  attack: 0.35,
+  decay: 2.0,
+  vib: 0.004,
+  breath: 0.02,
+  detune: 8
+}, {
+  n: "AHH SOFT",
+  formants: [770, 1100, 2600],
+  q: [8, 9, 10],
+  attack: 0.16,
+  decay: 1.4,
+  vib: 0.007,
+  breath: 0.05
+}, {
+  n: "YEAH",
+  formants: [700, 1500, 2600],
+  q: [9, 10, 11],
+  attack: 0.02,
+  decay: 0.55,
+  vib: 0.005,
+  breath: 0.05,
+  glide: 3
+}, {
+  n: "WHOA",
+  formants: [450, 900, 2500],
+  q: [9, 10, 11],
+  attack: 0.03,
+  decay: 0.7,
+  vib: 0.006,
+  breath: 0.04,
+  glide: -4
+}, {
+  n: "NAH",
+  formants: [720, 1300, 2600],
+  q: [10, 10, 11],
+  attack: 0.02,
+  decay: 0.5,
+  vib: 0.005,
+  breath: 0.04
+}, {
+  n: "LAH",
+  formants: [760, 1400, 2700],
+  q: [9, 10, 11],
+  attack: 0.02,
+  decay: 0.5,
+  vib: 0.005,
+  breath: 0.04
+}, {
+  n: "DOO",
+  formants: [400, 1000, 2400],
+  q: [11, 11, 12],
+  attack: 0.02,
+  decay: 0.45,
+  vib: 0.004,
+  breath: 0.02
+}, {
+  n: "HEY",
+  formants: [660, 1700, 2500],
+  q: [9, 10, 11],
+  attack: 0.02,
+  decay: 0.5,
+  vib: 0.005,
+  breath: 0.06,
+  glide: 2
+}, {
+  n: "AIR VOX",
+  formants: [520, 1600, 3000],
+  q: [6, 7, 8],
+  attack: 0.25,
+  decay: 1.8,
+  vib: 0.004,
+  breath: 0.35,
+  detune: 6
+}];
+// Frills — a pad-triggered one-shot FX lane. Each entry is a synthesized
+// riser / whoosh / blip / impact, selected per step (one frill per step).
+const FRILLS = [{
+  id: "whup",
+  n: "WHOOSH ↑"
+}, {
+  id: "whdn",
+  n: "WHOOSH ↓"
+}, {
+  id: "riser",
+  n: "RISER"
+}, {
+  id: "downl",
+  n: "DOWNLIFT"
+}, {
+  id: "impact",
+  n: "IMPACT"
+}, {
+  id: "subdrop",
+  n: "SUB DROP"
+}, {
+  id: "blip",
+  n: "BLIP"
+}, {
+  id: "coin",
+  n: "COIN"
+}, {
+  id: "zap",
+  n: "ZAP"
+}, {
+  id: "laser",
+  n: "LASER ↑"
+}, {
+  id: "revcym",
+  n: "REV CYM"
+}, {
+  id: "vinyl",
+  n: "VINYL STOP"
+}, {
+  id: "tape",
+  n: "TAPE STOP"
+}, {
+  id: "sparkle",
+  n: "SPARKLE"
+}, {
+  id: "siren",
+  n: "SIREN"
+}, {
+  id: "noise",
+  n: "NOISE HIT"
+}, {
+  id: "airhit",
+  n: "AIR SWELL"
+}, {
+  id: "glitch",
+  n: "GLITCH"
+}, {
+  id: "click",
+  n: "TICK"
+}, {
+  id: "horn",
+  n: "AIR HORN"
+}];
 const DELAY_TIMES = ["1/8", "3/16", "1/4"];
 const emptyDrums = () => Object.fromEntries(TRACKS.map(t => [t.id, Array(STEPS).fill(false)]));
 const nulls = () => Array(STEPS).fill(null);
@@ -659,7 +897,9 @@ function createEngine(ctx) {
     drums: makeBus(),
     bass: makeBus(),
     lead: makeBus(),
-    chord: makeBus()
+    chord: makeBus(),
+    vocal: makeBus(),
+    frill: makeBus()
   };
   return {
     ctx,
@@ -1188,6 +1428,264 @@ function synthChord(ctx, noise, dest, t, freqs, level, voice) {
   });
   f.connect(g).connect(dest);
 }
+function synthVocal(ctx, noise, dest, t, freq, level, voice) {
+  const V = VOCAL_VOICES[voice] || VOCAL_VOICES[0];
+  const dur = V.decay;
+  const out = env(ctx, t, 0.55 * level, dur, V.attack);
+  out.connect(dest);
+  // shared vibrato LFO modulating pitch
+  const lfo = ctx.createOscillator();
+  lfo.type = "sine";
+  lfo.frequency.value = 5.3;
+  const lfoG = ctx.createGain();
+  lfoG.gain.value = freq * (V.vib || 0);
+  lfo.connect(lfoG);
+  lfo.start(t);
+  lfo.stop(t + dur + 0.1);
+  const detunes = V.detune ? [-V.detune, V.detune] : [0];
+  const ampByFormant = [1, 0.65, 0.35];
+  detunes.forEach(cents => {
+    const src = ctx.createOscillator();
+    src.type = "sawtooth";
+    const startF = V.glide ? freq * Math.pow(2, V.glide / 12) : freq;
+    src.frequency.setValueAtTime(startF, t);
+    if (V.glide) src.frequency.exponentialRampToValueAtTime(freq, t + Math.min(0.16, dur * 0.5));
+    src.detune.value = cents;
+    lfoG.connect(src.frequency);
+    const mix = ctx.createGain();
+    mix.gain.value = 1 / detunes.length;
+    V.formants.forEach((ff, i) => {
+      const bp = ctx.createBiquadFilter();
+      bp.type = "bandpass";
+      bp.frequency.value = ff;
+      bp.Q.value = V.q && V.q[i] ? V.q[i] : 9;
+      const g = ctx.createGain();
+      g.gain.value = ampByFormant[i] != null ? ampByFormant[i] : 0.3;
+      src.connect(bp).connect(g).connect(mix);
+    });
+    mix.connect(out);
+    src.start(t);
+    src.stop(t + dur + 0.1);
+  });
+  if (V.breath) {
+    const bp = ctx.createBiquadFilter();
+    bp.type = "bandpass";
+    bp.frequency.value = V.formants[1];
+    bp.Q.value = 1.4;
+    const ng = ctx.createGain();
+    ng.gain.value = V.breath;
+    noiseSrc(ctx, noise, t, dur).connect(bp).connect(ng).connect(out);
+  }
+}
+function frillNoise(ctx, noise, dest, t, dur, type, f0, f1, Q, peak, atk) {
+  const bp = ctx.createBiquadFilter();
+  bp.type = type;
+  bp.Q.value = Q;
+  bp.frequency.setValueAtTime(f0, t);
+  bp.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  noiseSrc(ctx, noise, t, dur).connect(bp).connect(env(ctx, t, peak, dur, atk)).connect(dest);
+}
+function synthFrill(ctx, noise, dest, t, idx, level = 0.8) {
+  const L = level;
+  const id = FRILLS[idx] && FRILLS[idx].id;
+  if (id === "whup") {
+    frillNoise(ctx, noise, dest, t, 0.6, "bandpass", 300, 6500, 1.1, 0.5 * L, 0.06);
+    return;
+  }
+  if (id === "whdn") {
+    frillNoise(ctx, noise, dest, t, 0.6, "bandpass", 6500, 300, 1.1, 0.5 * L, 0.02);
+    return;
+  }
+  if (id === "riser") {
+    const o = ctx.createOscillator();
+    o.type = "sawtooth";
+    o.frequency.setValueAtTime(200, t);
+    o.frequency.exponentialRampToValueAtTime(1800, t + 1.4);
+    const f = ctx.createBiquadFilter();
+    f.type = "lowpass";
+    f.Q.value = 6;
+    f.frequency.setValueAtTime(500, t);
+    f.frequency.exponentialRampToValueAtTime(6000, t + 1.4);
+    o.connect(f).connect(env(ctx, t, 0.26 * L, 1.5, 0.6)).connect(dest);
+    o.start(t);
+    o.stop(t + 1.55);
+    frillNoise(ctx, noise, dest, t, 1.4, "bandpass", 800, 8000, 1.0, 0.18 * L, 0.7);
+    return;
+  }
+  if (id === "downl") {
+    const o = ctx.createOscillator();
+    o.type = "sawtooth";
+    o.frequency.setValueAtTime(1400, t);
+    o.frequency.exponentialRampToValueAtTime(140, t + 1.2);
+    const f = ctx.createBiquadFilter();
+    f.type = "lowpass";
+    f.Q.value = 5;
+    f.frequency.setValueAtTime(5000, t);
+    f.frequency.exponentialRampToValueAtTime(400, t + 1.2);
+    o.connect(f).connect(env(ctx, t, 0.24 * L, 1.25, 0.02)).connect(dest);
+    o.start(t);
+    o.stop(t + 1.3);
+    return;
+  }
+  if (id === "impact") {
+    const o = ctx.createOscillator();
+    o.type = "sine";
+    o.frequency.setValueAtTime(160, t);
+    o.frequency.exponentialRampToValueAtTime(40, t + 0.4);
+    o.connect(env(ctx, t, 0.9 * L, 0.8)).connect(dest);
+    o.start(t);
+    o.stop(t + 0.85);
+    frillNoise(ctx, noise, dest, t, 0.7, "lowpass", 1200, 120, 0.7, 0.4 * L, 0.002);
+    return;
+  }
+  if (id === "subdrop") {
+    const o = ctx.createOscillator();
+    o.type = "sine";
+    o.frequency.setValueAtTime(120, t);
+    o.frequency.exponentialRampToValueAtTime(28, t + 0.9);
+    o.connect(env(ctx, t, 0.95 * L, 1.0)).connect(dest);
+    o.start(t);
+    o.stop(t + 1.05);
+    return;
+  }
+  if (id === "blip") {
+    const o = ctx.createOscillator();
+    o.type = "sine";
+    o.frequency.setValueAtTime(880, t);
+    o.frequency.exponentialRampToValueAtTime(1760, t + 0.08);
+    o.connect(env(ctx, t, 0.4 * L, 0.12)).connect(dest);
+    o.start(t);
+    o.stop(t + 0.14);
+    return;
+  }
+  if (id === "coin") {
+    [988, 1319].forEach((fr, i) => {
+      const o = ctx.createOscillator();
+      o.type = "square";
+      o.frequency.value = fr;
+      o.connect(env(ctx, t + i * 0.05, 0.22 * L, 0.12)).connect(dest);
+      o.start(t + i * 0.05);
+      o.stop(t + i * 0.05 + 0.14);
+    });
+    return;
+  }
+  if (id === "zap") {
+    const o = ctx.createOscillator();
+    o.type = "sawtooth";
+    o.frequency.setValueAtTime(2600, t);
+    o.frequency.exponentialRampToValueAtTime(120, t + 0.22);
+    o.connect(env(ctx, t, 0.3 * L, 0.26)).connect(dest);
+    o.start(t);
+    o.stop(t + 0.3);
+    return;
+  }
+  if (id === "laser") {
+    const o = ctx.createOscillator();
+    o.type = "square";
+    o.frequency.setValueAtTime(300, t);
+    o.frequency.exponentialRampToValueAtTime(3200, t + 0.2);
+    o.connect(env(ctx, t, 0.24 * L, 0.24)).connect(dest);
+    o.start(t);
+    o.stop(t + 0.28);
+    return;
+  }
+  if (id === "revcym") {
+    frillNoise(ctx, noise, dest, t, 0.9, "highpass", 2000, 9000, 0.8, 0.34 * L, 0.85);
+    return;
+  }
+  if (id === "vinyl") {
+    const o = ctx.createOscillator();
+    o.type = "sawtooth";
+    o.frequency.setValueAtTime(400, t);
+    o.frequency.exponentialRampToValueAtTime(50, t + 0.5);
+    const f = ctx.createBiquadFilter();
+    f.type = "lowpass";
+    f.frequency.value = 1600;
+    o.connect(f).connect(env(ctx, t, 0.3 * L, 0.55)).connect(dest);
+    o.start(t);
+    o.stop(t + 0.6);
+    return;
+  }
+  if (id === "tape") {
+    const o = ctx.createOscillator();
+    o.type = "triangle";
+    o.frequency.setValueAtTime(660, t);
+    o.frequency.exponentialRampToValueAtTime(90, t + 0.35);
+    o.connect(env(ctx, t, 0.32 * L, 0.4)).connect(dest);
+    o.start(t);
+    o.stop(t + 0.45);
+    return;
+  }
+  if (id === "sparkle") {
+    for (let i = 0; i < 6; i++) {
+      const o = ctx.createOscillator();
+      o.type = "sine";
+      o.frequency.value = 1200 + (i % 3) * 700 + i * 90;
+      const st = t + i * 0.045;
+      o.connect(env(ctx, st, 0.16 * L, 0.14)).connect(dest);
+      o.start(st);
+      o.stop(st + 0.16);
+    }
+    return;
+  }
+  if (id === "siren") {
+    const o = ctx.createOscillator();
+    o.type = "sine";
+    o.frequency.value = 900;
+    const lfo = ctx.createOscillator();
+    lfo.type = "sine";
+    lfo.frequency.value = 6;
+    const lg = ctx.createGain();
+    lg.gain.value = 300;
+    lfo.connect(lg).connect(o.frequency);
+    o.connect(env(ctx, t, 0.24 * L, 0.7, 0.02)).connect(dest);
+    o.start(t);
+    o.stop(t + 0.75);
+    lfo.start(t);
+    lfo.stop(t + 0.75);
+    return;
+  }
+  if (id === "noise") {
+    frillNoise(ctx, noise, dest, t, 0.18, "bandpass", 3000, 3000, 0.7, 0.45 * L, 0.001);
+    return;
+  }
+  if (id === "airhit") {
+    frillNoise(ctx, noise, dest, t, 0.8, "bandpass", 4000, 4000, 0.5, 0.28 * L, 0.4);
+    return;
+  }
+  if (id === "glitch") {
+    for (let i = 0; i < 4; i++) {
+      const o = ctx.createOscillator();
+      o.type = "square";
+      o.frequency.value = 400 + (i % 2 ? 900 : -120) + i * 260;
+      const st = t + i * 0.03;
+      o.connect(env(ctx, st, 0.2 * L, 0.04)).connect(dest);
+      o.start(st);
+      o.stop(st + 0.05);
+    }
+    return;
+  }
+  if (id === "click") {
+    frillNoise(ctx, noise, dest, t, 0.03, "highpass", 6000, 6000, 0.7, 0.4 * L, 0.001);
+    return;
+  }
+  if (id === "horn") {
+    const g = env(ctx, t, 0.26 * L, 0.6, 0.02);
+    [415, 622, 830].forEach(fr => {
+      const o = ctx.createOscillator();
+      o.type = "sawtooth";
+      o.frequency.value = fr;
+      const og = ctx.createGain();
+      og.gain.value = 0.4;
+      o.connect(og).connect(g);
+      o.start(t);
+      o.stop(t + 0.65);
+    });
+    g.connect(dest);
+    return;
+  }
+  frillNoise(ctx, noise, dest, t, 0.3, "bandpass", 2000, 2000, 1, 0.3 * L, 0.01);
+}
 function triggerDrum(ctx, noise, dest, id, t) {
   if (id === "kick") synthKick(ctx, noise, dest, t);else if (id === "snare") synthSnare(ctx, noise, dest, t);else if (id === "clap") synthClap(ctx, noise, dest, t);else if (id === "rim") synthRim(ctx, noise, dest, t);else if (id === "chat") synthHat(ctx, noise, dest, t, false);else if (id === "ohat") synthHat(ctx, noise, dest, t, true);else if (id === "ltom") synthTom(ctx, noise, dest, t, true);else if (id === "htom") synthTom(ctx, noise, dest, t, false);else if (id === "cow") synthCowbell(ctx, noise, dest, t);else if (id === "ride") synthRide(ctx, noise, dest, t);
 }
@@ -1202,6 +1700,8 @@ function scheduleStepInto(e, parts, step, t, mutedMap, p) {
   if (parts.bass && parts.bass[step] !== null && !mutedMap.bass) synthBass(e.ctx, e.noise, e.buses.bass.in, t, BASS_NOTES[parts.bass[step]].f, p.cutoff, p.res, p.bassVoice);
   if (parts.lead && parts.lead[step] !== null && !mutedMap.lead) synthLead(e.ctx, e.noise, e.buses.lead.in, t, LEAD_NOTES[parts.lead[step]].f, p.leadLevel / 100, p.leadVoice);
   if (parts.chord && parts.chord[step] !== null && !mutedMap.chord) synthChord(e.ctx, e.noise, e.buses.chord.in, t, CHORDS[parts.chord[step]].f, p.chordLevel / 100, p.chordVoice);
+  if (parts.vocal && parts.vocal[step] !== null && !mutedMap.vocal) synthVocal(e.ctx, e.noise, e.buses.vocal.in, t, VOCAL_NOTES[parts.vocal[step]].f, p.vocalLevel / 100, p.vocalVoice);
+  if (parts.frill && parts.frill[step] !== null && !mutedMap.frill) synthFrill(e.ctx, e.noise, e.buses.frill.in, t, parts.frill[step], p.frillLevel / 100);
 }
 function schedulePump(e, t, beatDur, depth) {
   if (depth <= 0) return;
@@ -1270,20 +1770,36 @@ function TrackMaker() {
       B: [...PRESETS["TRANCE"].chord],
       C: [...PRESETS["DISCO"].chord],
       D: [...PRESETS["BREAKDOWN"].chord]
+    },
+    vocal: {
+      A: [null, null, null, null, 4, null, null, null, null, null, 2, null, null, null, null, null],
+      B: nulls(),
+      C: nulls(),
+      D: nulls()
+    },
+    frill: {
+      A: [2, null, null, null, null, null, null, null, null, null, null, null, null, null, 6, null],
+      B: nulls(),
+      C: nulls(),
+      D: nulls()
     }
   });
   const [editSel, setEditSel] = useState({
     drums: "A",
     bass: "A",
     lead: "A",
-    chord: "A"
+    chord: "A",
+    vocal: "A",
+    frill: "A"
   });
   const [mode, setMode] = useState("PATTERN"); // PATTERN | SONG
   const [song, setSong] = useState({
     drums: ["A", "A", "A", "A", "A", "A", "A", "A", "B", "B", "B", "B", "A", "A", "B", "B"],
     bass: [null, null, null, null, "A", "A", "A", "A", "B", "B", "B", "B", "B", "B", "B", "B"],
     lead: [null, null, null, null, null, null, "A", "A", null, null, null, null, "A", "A", "A", "A"],
-    chord: ["A", "A", "A", "A", "A", "A", "A", "A", null, null, null, null, "A", "A", "A", "A"]
+    chord: ["A", "A", "A", "A", "A", "A", "A", "A", null, null, null, null, "A", "A", "A", "A"],
+    vocal: [null, null, null, null, null, null, null, null, null, null, null, null, "A", "A", "A", "A"],
+    frill: [null, null, null, "A", null, null, null, "A", null, null, null, null, "A", null, null, null]
   });
   const [songLabels, setSongLabels] = useState(["INTRO", "BUILD", "DROP", "BREAK"]);
   const [playing, setPlaying] = useState(false);
@@ -1293,10 +1809,13 @@ function TrackMaker() {
   const [res, setRes] = useState(8);
   const [leadLevel, setLeadLevel] = useState(80);
   const [chordLevel, setChordLevel] = useState(70);
+  const [vocalLevel, setVocalLevel] = useState(80);
+  const [frillLevel, setFrillLevel] = useState(75);
   const [voices, setVoices] = useState({
     bass: 0,
     lead: 0,
-    chord: 0
+    chord: 0,
+    vocal: 0
   });
   const [fx, setFx] = useState({
     drive: 0,
@@ -1311,7 +1830,9 @@ function TrackMaker() {
     drums: false,
     bass: false,
     lead: true,
-    chord: true
+    chord: true,
+    vocal: true,
+    frill: true
   });
   const [muted, setMuted] = useState({});
   const [open, setOpen] = useState({
@@ -1319,6 +1840,8 @@ function TrackMaker() {
     bass: true,
     lead: false,
     chord: false,
+    vocal: false,
+    frill: false,
     fx: false
   });
   const [playhead, setPlayhead] = useState(-1);
@@ -1369,11 +1892,14 @@ function TrackMaker() {
       res,
       leadLevel,
       chordLevel,
+      vocalLevel,
+      frillLevel,
       bassVoice: voices.bass,
       leadVoice: voices.lead,
-      chordVoice: voices.chord
+      chordVoice: voices.chord,
+      vocalVoice: voices.vocal
     };
-  }, [cutoff, res, leadLevel, chordLevel, voices]);
+  }, [cutoff, res, leadLevel, chordLevel, vocalLevel, frillLevel, voices]);
   useEffect(() => {
     fxRef.current = fx;
   }, [fx]);
@@ -1546,6 +2072,8 @@ function TrackMaker() {
       if (secKey === "bass") audition((e, t) => synthBass(e.ctx, e.noise, e.buses.bass.in, t, BASS_NOTES[row].f, pr.cutoff, pr.res, pr.bassVoice));
       if (secKey === "lead") audition((e, t) => synthLead(e.ctx, e.noise, e.buses.lead.in, t, LEAD_NOTES[row].f, pr.leadLevel / 100, pr.leadVoice));
       if (secKey === "chord") audition((e, t) => synthChord(e.ctx, e.noise, e.buses.chord.in, t, CHORDS[row].f, pr.chordLevel / 100, pr.chordVoice));
+      if (secKey === "vocal") audition((e, t) => synthVocal(e.ctx, e.noise, e.buses.vocal.in, t, VOCAL_NOTES[row].f, pr.vocalLevel / 100, pr.vocalVoice));
+      if (secKey === "frill") audition((e, t) => synthFrill(e.ctx, e.noise, e.buses.frill.in, t, row, pr.frillLevel / 100));
     }
     return {
       ...ps,
@@ -1577,7 +2105,9 @@ function TrackMaker() {
         drums: grow(s.drums),
         bass: grow(s.bass),
         lead: grow(s.lead),
-        chord: grow(s.chord)
+        chord: grow(s.chord),
+        vocal: grow(s.vocal),
+        frill: grow(s.frill)
       };
     });
     setSongLabels(ls => ls.length >= MAX_SECTIONS ? ls : [...ls, "SECTION " + (ls.length + 1)]);
@@ -1590,7 +2120,9 @@ function TrackMaker() {
         drums: cut(s.drums),
         bass: cut(s.bass),
         lead: cut(s.lead),
-        chord: cut(s.chord)
+        chord: cut(s.chord),
+        vocal: cut(s.vocal),
+        frill: cut(s.frill)
       };
     });
     setSongLabels(ls => ls.length <= 1 ? ls : ls.slice(0, -1));
@@ -1638,15 +2170,26 @@ function TrackMaker() {
     chord: {
       ...ps.chord,
       [editSel.chord]: [...PRESETS[name].chord]
+    },
+    vocal: {
+      ...ps.vocal,
+      [editSel.vocal]: PRESETS[name].vocal ? [...PRESETS[name].vocal] : nulls()
+    },
+    frill: {
+      ...ps.frill,
+      [editSel.frill]: PRESETS[name].frill ? [...PRESETS[name].frill] : nulls()
     }
   }));
   const loadArrangement = name => {
     const a = SONG_ARRANGEMENTS[name];
+    const blank = Array(a.drums.length).fill(null);
     setSong({
       drums: [...a.drums],
       bass: [...a.bass],
       lead: [...a.lead],
-      chord: [...a.chord]
+      chord: [...a.chord],
+      vocal: a.vocal ? [...a.vocal] : [...blank],
+      frill: a.frill ? [...a.frill] : [...blank]
     });
     setSongLabels(ls => fitLabels(ls, a.drums.length / BARS_PER_SECTION));
   };
@@ -2038,7 +2581,8 @@ function TrackMaker() {
     const c = SECTION_META[secKey].color;
     const cur = patterns[secKey][editSel[secKey]];
     const head = showHeadFor(secKey);
-    if (secKey === "chord") return CHORDS.map((ch, row) => /*#__PURE__*/_jsxDEV("div", {
+    const rowList = secKey === "chord" ? CHORDS : secKey === "frill" ? FRILLS : null;
+    if (rowList) return rowList.map((ch, row) => /*#__PURE__*/_jsxDEV("div", {
       style: {
         ...S.row,
         marginBottom: 3
@@ -2089,7 +2633,7 @@ function TrackMaker() {
           children: "STEP SEQ · 16"
         }, void 0, false), /*#__PURE__*/_jsxDEV("div", {
           style: S.sub,
-          children: "DANCE TRACK MAKER v5"
+          children: "DANCE TRACK MAKER v6"
         }, void 0, false)]
       }, void 0, true), /*#__PURE__*/_jsxDEV("div", {
         style: S.transport,
@@ -2419,6 +2963,70 @@ function TrackMaker() {
             }, void 0, false)]
           }, void 0, true)]
         }, void 0, true), noteRows("chord", CHORDS, 17)]
+      }, void 0, true), sectionHeader("vocal", VOCAL_VOICES[voices.vocal].n), open.vocal && /*#__PURE__*/_jsxDEV(_Fragment, {
+        children: [/*#__PURE__*/_jsxDEV("div", {
+          style: S.sectionCtrls,
+          children: [sectionPatternBar("vocal"), /*#__PURE__*/_jsxDEV("div", {
+            style: {
+              display: "flex",
+              gap: 4,
+              flexWrap: "wrap"
+            },
+            children: VOCAL_VOICES.map((v, vi) => /*#__PURE__*/_jsxDEV("button", {
+              style: S.voiceBtn(voices.vocal === vi, SECTION_META.vocal.color),
+              onClick: () => setVoices(vs => ({
+                ...vs,
+                vocal: vi
+              })),
+              children: v.n
+            }, v.n, false))
+          }, void 0, false), /*#__PURE__*/_jsxDEV("div", {
+            style: S.knob,
+            children: [/*#__PURE__*/_jsxDEV("div", {
+              style: S.knobLabel,
+              children: [/*#__PURE__*/_jsxDEV("span", {
+                children: "LEVEL"
+              }, void 0, false), /*#__PURE__*/_jsxDEV("span", {
+                children: [vocalLevel, "%"]
+              }, void 0, true)]
+            }, void 0, true), /*#__PURE__*/_jsxDEV("input", {
+              type: "range",
+              min: 0,
+              max: 100,
+              value: vocalLevel,
+              onChange: e => setVocalLevel(+e.target.value),
+              style: {
+                width: "100%",
+                accentColor: SECTION_META.vocal.color
+              }
+            }, void 0, false)]
+          }, void 0, true)]
+        }, void 0, true), noteRows("vocal", VOCAL_NOTES, 15)]
+      }, void 0, true), sectionHeader("frill", `${FRILLS.length} FX`), open.frill && /*#__PURE__*/_jsxDEV(_Fragment, {
+        children: [/*#__PURE__*/_jsxDEV("div", {
+          style: S.sectionCtrls,
+          children: [sectionPatternBar("frill"), /*#__PURE__*/_jsxDEV("div", {
+            style: S.knob,
+            children: [/*#__PURE__*/_jsxDEV("div", {
+              style: S.knobLabel,
+              children: [/*#__PURE__*/_jsxDEV("span", {
+                children: "LEVEL"
+              }, void 0, false), /*#__PURE__*/_jsxDEV("span", {
+                children: [frillLevel, "%"]
+              }, void 0, true)]
+            }, void 0, true), /*#__PURE__*/_jsxDEV("input", {
+              type: "range",
+              min: 0,
+              max: 100,
+              value: frillLevel,
+              onChange: e => setFrillLevel(+e.target.value),
+              style: {
+                width: "100%",
+                accentColor: SECTION_META.frill.color
+              }
+            }, void 0, false)]
+          }, void 0, true)]
+        }, void 0, true), noteRows("frill", FRILLS, 13)]
       }, void 0, true), /*#__PURE__*/_jsxDEV("button", {
         style: S.sectionHead(FX_COLOR),
         onClick: () => toggleOpen("fx"),
